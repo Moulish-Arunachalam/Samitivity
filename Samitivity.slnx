@@ -1,0 +1,6 @@
+<Solution>
+<Project Path="src/Samitivity.Core/Samitivity.Core.csproj" />
+<Project Path="src/Samitivity.Windows/Samitivity.Windows.csproj" />
+<Project Path="tests/Samitivity.Tests/Samitivity.Tests.csproj" />
+<Project Path="tests/Samitivity.Windows.Tests/Samitivity.Windows.Tests.csproj" />
+</Solution>

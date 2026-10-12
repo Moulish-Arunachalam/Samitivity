@@ -1,0 +1,33 @@
+{
+  "Version": 1,
+  "Categories": [
+    {
+      "Id": "05c22a8f-210d-4dab-bc9a-116a9c236101",
+      "Name": "Miss Me",
+      "Shortcut": {
+        "Modifiers": 3,
+        "Key": 83
+      }
+    },
+    {
+      "Id": "05c22a8f-210d-4dab-bc9a-116a9c236102",
+      "Name": "Motivation",
+      "Shortcut": {
+        "Modifiers": 14,
+        "Key": 83
+      }
+    },
+    {
+      "Id": "05c22a8f-210d-4dab-bc9a-116a9c236103",
+      "Name": "Just Because",
+      "Shortcut": {
+        "Modifiers": 5,
+        "Key": 83
+      }
+    }
+  ],
+  "StopShortcut": {
+    "Modifiers": 3,
+    "Key": 8
+  }
+}

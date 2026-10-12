@@ -1,0 +1,32 @@
+**/bin/
+**/obj/
+artifacts/
+.tools/
+.private/
+*.user
+*.pfx
+*.p12
+*.snk
+TestResults/
+.DS_Store
+# Only synthetic fixtures belong in Git.
+*.m4a
+*.mp3
+*.wav
+!samples/synthetic-*.wav
+
+# Credentials, certificates and local-only generated artifacts
+.env
+.env.*
+.aws/
+.secrets/
+*.pem
+*.key
+*.cer
+*.crt
+*.exe
+*.dll
+*.pdb
+*.dmp
+*.zip
+*.7z
