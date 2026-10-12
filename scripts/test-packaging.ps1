@@ -65,3 +65,6 @@ try {
     Set-Location $originalLocation
     Remove-Item $testRoot -Recurse -Force
 }
+
+# All assertions passed if execution reaches this point.
+exit 0
