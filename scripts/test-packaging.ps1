@@ -8,15 +8,24 @@ New-Item "$testRoot/scripts", "$testRoot/artifacts/publish", "$testRoot/installe
 Copy-Item (Join-Path $PSScriptRoot 'package.ps1') "$testRoot/scripts/package.ps1"
 Set-Content "$testRoot/artifacts/publish/Samitivity.exe" 'test placeholder; never distributed'
 $compiler = Join-Path $testRoot 'fake-compiler.ps1'
-@'
+function Set-FakeCompiler([string]$Version = '6.7.3', [int]$ProbeExit = 0, [int]$CompileExit = 0, [switch]$MissingBanner) {
+    @'
+param([string]$FirstArgument, [string]$ProbeFile)
+if ($FirstArgument -eq '/O-') {
+    if (!(Test-Path $ProbeFile) -or (Get-Content $ProbeFile -Raw) -notmatch 'Output=no') { throw 'Probe must disable output.' }
+    __BANNER__
+    exit __PROBE_EXIT__
+}
 New-Item artifacts/installer -ItemType Directory -Force | Out-Null
 Set-Content artifacts/installer/test-only.exe 'fake compiler output; not a Windows executable'
-exit 0
-'@ | Set-Content $compiler
-# Mock only the compiler's version resource. All filesystem inspection remains real.
+exit __COMPILE_EXIT__
+'@.Replace('__BANNER__', $(if ($MissingBanner) { "Write-Output 'unrecognized output'" } else { "Write-Output 'Compiler engine version: Inno Setup $Version'" })).Replace('__PROBE_EXIT__', "$ProbeExit").Replace('__COMPILE_EXIT__', "$CompileExit") | Set-Content $compiler
+}
+Set-FakeCompiler
+# Reproduce the real ISCC metadata that broke CI. Engine version must be used.
 function Get-Item {
     param([Parameter(Position=0)][string]$Path)
-    if ($Path -eq $compiler) { return [pscustomobject]@{ VersionInfo = [pscustomobject]@{ ProductVersion = '6.7.3' } } }
+    if ($Path -eq $compiler) { return [pscustomobject]@{ VersionInfo = [pscustomobject]@{ ProductVersion = '0.0.0.0' } } }
     Microsoft.PowerShell.Management\Get-Item -Path $Path
 }
 $package = "$testRoot/scripts/package.ps1"
@@ -58,8 +67,19 @@ try {
     Expect-Rejection 'CI private-bundle rejection' 'outside CI'
     $env:CI = ''
     Reset-Bundle
-    Set-Content $compiler 'exit 1'
+    Set-FakeCompiler -CompileExit 1
     Expect-Rejection 'compiler-failure cleanup' 'Installer compilation failed'
+    Reset-Bundle; Set-FakeCompiler -Version '6.7.2'
+    Expect-Rejection 'wrong engine version' 'Expected Inno Setup 6.7.3; found 6.7.2'
+    Set-FakeCompiler -Version '6.7.30'
+    Expect-Rejection 'version prefix is insufficient' 'Expected Inno Setup 6.7.3; found 6.7.30'
+    Set-FakeCompiler -MissingBanner
+    Expect-Rejection 'missing engine version' 'Could not determine'
+    Set-FakeCompiler -ProbeExit 2
+    Expect-Rejection 'failed engine probe' 'version probe failed'
+    Set-FakeCompiler
+    & $package -InnoCompiler $compiler | Out-Null
+    Write-Output 'PASS exact engine version accepted despite zero product metadata'
 } finally {
     $env:CI = $originalCi
     Set-Location $originalLocation

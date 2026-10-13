@@ -3,8 +3,29 @@ $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 if (!(Test-Path artifacts/publish/Samitivity.exe)) { throw 'Run scripts/build-windows.ps1 -Publish first.' }
 if (!(Test-Path $InnoCompiler)) { throw 'Run scripts/install-inno.ps1 on this Windows build host first.' }
-$compilerVersion = (Get-Item $InnoCompiler).VersionInfo.ProductVersion
-if ($compilerVersion -notlike '6.7.3*') { throw "Expected Inno Setup 6.7.3; found $compilerVersion" }
+# ISCC's PE ProductVersion may be 0.0.0.0. Query the loaded compiler engine
+# with a harmless no-output compilation instead. install-inno.ps1 separately
+# authenticates the pinned installer by SHA-256 and Authenticode publisher.
+$probe = Join-Path ([IO.Path]::GetTempPath()) ('Samitivity-InnoProbe-' + [Guid]::NewGuid().ToString('N') + '.iss')
+try {
+    @'
+[Setup]
+AppName=Samitivity compiler version probe
+AppVersion=1.0
+CreateAppDir=no
+Uninstallable=no
+Output=no
+'@ | Set-Content $probe -Encoding utf8
+    $probeOutput = & $InnoCompiler '/O-' $probe 2>&1
+    if ($LASTEXITCODE -ne 0) { throw 'Inno compiler version probe failed.' }
+    $versions = [regex]::Matches(($probeOutput -join "`n"), '(?m)^Compiler engine version: Inno Setup ([^\r\n]+)\r?$')
+    if ($versions.Count -ne 1) { throw 'Could not determine the Inno compiler engine version.' }
+    $compilerVersion = $versions[0].Groups[1].Value.Trim()
+    if ($compilerVersion -ne '6.7.3') { throw "Expected Inno Setup 6.7.3; found $compilerVersion" }
+    Write-Host "Verified compiler engine: Inno Setup $compilerVersion"
+} finally {
+    if (Test-Path $probe) { Remove-Item $probe -Force }
+}
 # Prevent accidental reuse of a private bundle by a later ordinary/public build.
 if (Test-Path artifacts/publish/BundledVoiceNotes) { Remove-Item artifacts/publish/BundledVoiceNotes -Recurse -Force }
 try {
