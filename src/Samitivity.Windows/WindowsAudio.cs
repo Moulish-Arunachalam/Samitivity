@@ -11,18 +11,19 @@ public sealed class WindowsAudioValidator : IAudioValidator
     public TimeSpan Validate(string path, CancellationToken cancellationToken)
     {
         using var reader = AudioPreparation.Open(path);
-        reader.WaveFormatChanged += (_, _) => throw new InvalidDataException("Mid-stream audio format changes are unsupported.");
+        reader.WaveFormatChanged += (_, _) => throw ImportFailure.Reject("format-change");
         var format = reader.WaveFormat;
+        Diagnostics.Mark($"validation_format:rate={format.SampleRate}:channels={format.Channels}:bits={format.BitsPerSample}");
         if (format.SampleRate is < 8000 or > 192000 || format.Channels is < 1 or > 8)
-            throw new InvalidDataException("Unsupported sample rate or channel layout.");
+            throw ImportFailure.Reject("audio-format");
         var buffer = new byte[64 * 1024]; long decoded = 0; int count;
         // Decode through EOF, in bounded memory. A readable header alone is not validation.
         while ((count = reader.Read(buffer, 0, buffer.Length)) > 0)
         {
             cancellationToken.ThrowIfCancellationRequested(); decoded += count;
-            if (decoded > (long)format.AverageBytesPerSecond * 7200) throw new InvalidDataException("Recording is longer than two hours.");
+            if (decoded > (long)format.AverageBytesPerSecond * 7200) throw ImportFailure.Reject("duration");
         }
-        if (decoded == 0) throw new InvalidDataException("The recording contains no decodable audio.");
+        if (decoded == 0) throw ImportFailure.Reject("empty-decode");
         return TimeSpan.FromSeconds((double)decoded / format.AverageBytesPerSecond);
     }
 }
@@ -35,9 +36,13 @@ internal static class AudioPreparation
     internal static MediaFoundationReader Open(string path)
     {
         var start = Diagnostics.Now;
-        var reader = new MediaFoundationReader(path, new MediaFoundationReader.MediaFoundationReaderSettings { SingleReaderObject = true });
-        Diagnostics.Mark("decoder_initialization", start);
-        return reader;
+        try
+        {
+            var reader = new MediaFoundationReader(path, new MediaFoundationReader.MediaFoundationReaderSettings { SingleReaderObject = true });
+            Diagnostics.Mark("decoder_initialization", start);
+            return reader;
+        }
+        catch (Exception e) { Diagnostics.Failure("decoder_open_failed", e); throw; }
     }
 }
 
@@ -73,7 +78,7 @@ public sealed class WindowsAudioBackend : IAudioBackend, IPlaybackNotifications,
             {
                 token.ThrowIfCancellationRequested();
                 using var reader = AudioPreparation.Open(recording.FullPath);
-                reader.WaveFormatChanged += (_, _) => throw new InvalidDataException("Mid-stream audio format changes are unsupported.");
+                reader.WaveFormatChanged += (_, _) => throw ImportFailure.Reject("format-change");
                 if (reader.Length > MaxPreparedBytes) return null;
                 using var memory = new MemoryStream();
                 var buffer = new byte[65536]; int count;
@@ -83,7 +88,7 @@ public sealed class WindowsAudioBackend : IAudioBackend, IPlaybackNotifications,
                     if (memory.Length + count > MaxPreparedBytes) return null;
                     memory.Write(buffer, 0, count);
                 }
-                if (memory.Length == 0) throw new InvalidDataException("Empty recording.");
+                if (memory.Length == 0) throw ImportFailure.Reject("empty-decode");
                 var prepared = new PreparedAudio(memory.ToArray(), reader.WaveFormat);
                 cache.Put(key, prepared, prepared.Bytes.Length);
                 return prepared;

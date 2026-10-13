@@ -1,4 +1,4 @@
-#define AppVersion "0.1.1"
+#define AppVersion "0.1.2"
 [Setup]
 AppId={{85169B43-476B-4788-BA4E-371D86AF384C}
 AppName=Samitivity
@@ -11,7 +11,7 @@ DisableDirPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0.19045
+MinVersion=10.0
 OutputDir=..\artifacts\installer
 OutputBaseFilename=Samitivity-{#AppVersion}-win-x64-setup
 Compression=lzma2
@@ -21,6 +21,9 @@ UninstallDisplayIcon={app}\Samitivity.exe
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=no
+
+[Messages]
+WindowsVersionNotSupported=Samitivity requires 64-bit Windows 10 or Windows 11. Run winver to check the Windows build. Compatibility layers such as CrossOver are not native Windows validation.
 
 [Files]
 Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

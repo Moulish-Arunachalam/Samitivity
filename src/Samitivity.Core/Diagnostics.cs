@@ -13,6 +13,14 @@ public static class Diagnostics
     public static long Now => Stopwatch.GetTimestamp();
     public static void Mark(string stage, long started = 0, long request = 0) => events.Writer.TryWrite(
         FormattableString.Invariant($"{Stopwatch.GetElapsedTime(origin).TotalMilliseconds:F2}\t{request}\t{stage}\t{(started == 0 ? 0 : Stopwatch.GetElapsedTime(started).TotalMilliseconds):F2}"));
+    public static string FailureSummary(Exception exception)
+    {
+        var items = new List<string>();
+        for (var depth = 0; exception is not null && depth < 4; depth++, exception = exception.InnerException!)
+            items.Add($"{exception.GetType().Name}:0x{exception.HResult:X8}:{ImportFailure.Reason(exception)}");
+        return string.Join("/", items);
+    }
+    public static void Failure(string stage, Exception exception) => Mark(stage + ":" + FailureSummary(exception));
     public static void Start(string directory)
     {
         writer ??= Task.Run(async () =>

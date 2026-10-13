@@ -71,11 +71,11 @@ public sealed class LibraryService : IRecordingSource
         source = Path.GetFullPath(source);
         if (source.StartsWith(@"\\", StringComparison.Ordinal) || source.StartsWith("//", StringComparison.Ordinal) ||
             (OperatingSystem.IsWindows() && new DriveInfo(Path.GetPathRoot(source)!).DriveType == DriveType.Network))
-            throw new InvalidDataException("Import from a local disk or USB drive; network paths are not supported.");
+            throw ImportFailure.Reject("local-source-required");
         var extension = Path.GetExtension(source).ToLowerInvariant();
-        if (!Extensions.Contains(extension)) throw new InvalidDataException("Choose M4A, MP3 or WAV recordings.");
+        if (!Extensions.Contains(extension)) throw ImportFailure.Reject("extension");
         if (!File.Exists(source) || new FileInfo(source).Length is <= 0 or > MaxFileBytes)
-            throw new InvalidDataException("Recordings must be nonempty and at most 256 MiB.");
+            throw ImportFailure.Reject("file-size");
         RejectLinks(source);
         var target = Path.Combine(root, ".staging", Guid.NewGuid().ToString("N") + ".part" + extension);
         try
@@ -87,7 +87,7 @@ public sealed class LibraryService : IRecordingSource
                 while ((read = input.Read(buffer)) != 0)
                 {
                     cancellationToken.ThrowIfCancellationRequested(); copied += read;
-                    if (copied > MaxFileBytes) throw new InvalidDataException("Recording exceeds 256 MiB.");
+                    if (copied > MaxFileBytes) throw ImportFailure.Reject("file-size");
                     output.Write(buffer, 0, read);
                 }
                 output.Flush(true);
@@ -97,7 +97,7 @@ public sealed class LibraryService : IRecordingSource
             var validation = Diagnostics.Now;
             var duration = validator.Validate(target, cancellationToken);
             Diagnostics.Mark("import_validation", validation);
-            if (duration <= TimeSpan.Zero || duration > TimeSpan.FromHours(2)) throw new InvalidDataException("Recording must be shorter than two hours and contain audio.");
+            if (duration <= TimeSpan.Zero || duration > TimeSpan.FromHours(2)) throw ImportFailure.Reject("duration");
             using var stream = File.OpenRead(target);
             var hash = Convert.ToHexString(SHA256.HashData(stream));
             Diagnostics.Mark("import_total", started);

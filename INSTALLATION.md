@@ -2,7 +2,7 @@
 
 ## Recipient requirements
 
-Use a Windows x64 laptop with built-in Media Foundation and an ordinary Windows audio device. Windows 11 is the primary target; validate Windows 10 22H2 separately and ensure the OS remains supported. Windows N without media components cannot decode the required formats under the no-extra-installation rule. Windows S mode, managed policies, ARM64 emulation, secure desktops, and remote sessions are not promised. Bluetooth keyboards work through Windows' normal keyboard stack; reconnection and firmware behavior require the actual recipient hardware.
+Use a Windows x64 laptop with built-in Media Foundation and an ordinary Windows audio device. Windows 10 and Windows 11 x64 are the intended targets. Version 0.1.2 removes the old 22H2 installer cutoff, allowing 1909 and earlier Windows 10 builds. Runtime/audio compatibility on each historical build still requires physical testing; see docs/COMPATIBILITY-0.1.2.md. Windows N without media components cannot decode the required formats under the no-extra-installation rule. Windows S mode, managed policies, ARM64 emulation, secure desktops, and remote sessions are not promised. Bluetooth keyboards work through Windows' normal keyboard stack; reconnection and firmware behavior require the actual recipient hardware.
 
 Installation is per user and should not show a UAC elevation prompt. Binaries go to `%LOCALAPPDATA%\Programs\Samitivity`. Notes/settings live separately under `%LOCALAPPDATA%\LittleNotes`. The app starts silently at Windows sign-in. A self-contained .NET runtime is bundled, so the recipient does not install .NET, codecs, or a media player.
 
@@ -16,7 +16,7 @@ Install the SDK version listed in `global.json`. On a Windows build host:
 ./scripts/package.ps1
 ```
 
-The second command downloads **build tooling**, verifies its pinned hash/publisher, and installs it in `.tools/inno`. It is not run on the recipient's PC. The resulting installer is `artifacts/installer/Samitivity-0.1.1-win-x64-setup.exe`. Build output is unsigned unless you arrange legitimate signing.
+The second command downloads **build tooling**, verifies its pinned hash/publisher, and installs it in `.tools/inno`. It is not run on the recipient's PC. The resulting installer is `artifacts/installer/Samitivity-0.1.2-win-x64-setup.exe`. Build output is unsigned unless you arrange legitimate signing.
 
 Alternatively, push this repository to GitHub and open **Actions → Build and test Samitivity**. The workflow compiles/tests on a Windows runner and uploads **Samitivity-win-x64-installer**, retained for 14 days. Download and unzip the artifact to get the installer. Logs and `.trx` reports are separate artifacts. The current local checkout has no configured GitHub remote, so Windows CI has not yet been run.
 

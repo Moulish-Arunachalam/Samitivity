@@ -94,6 +94,7 @@ public sealed class PlaybackController : IAsyncDisposable
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { r.Done.TrySetResult(false); }
             catch (Exception e)
             {
+                Diagnostics.Failure("playback_failed", e);
                 Report(r, PlayerPhase.Error, $"Playback unavailable ({e.GetType().Name}). Check the recording and Windows output device, then try again.");
                 r.Done.TrySetResult(false);
             }

@@ -11,5 +11,6 @@ if ($Publish) {
     # Publish from a clean staging directory so old DLLs/private bundles cannot leak into a new installer.
     if (Test-Path artifacts/publish) { Remove-Item artifacts/publish -Recurse -Force }
     dotnet publish src/Samitivity.Windows/Samitivity.Windows.csproj -c Release -r win-x64 --self-contained true -p:RestoreLockedMode=true -p:PublishSingleFile=false -o artifacts/publish; CheckExit
+    Copy-Item scripts/collect-compatibility.ps1 artifacts/publish/
     Copy-Item README.md,INSTALLATION.md,SECURITY.md,THIRD-PARTY-NOTICES.md artifacts/publish/
 }

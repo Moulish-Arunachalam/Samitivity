@@ -203,12 +203,12 @@ internal sealed class ManagementForm : Form
                 var progressText = new Progress<string>(phase => { if (busy) pendingLabel.Text = $"{phase} recordings — {itemNumber} of {picker.FileNames.Length}"; });
                 try { var staged = await Task.Run(() => app.Library.Stage(file, cancellation.Token, progressText)); imports.Add((c.Id, staged)); dirty = true; }
                 catch (OperationCanceledException) { break; }
-                catch (Exception e) { errors.Add($"{Path.GetFileName(file)}: unsupported, damaged or inaccessible ({e.GetType().Name})."); }
+                catch (Exception e) { Samitivity.Core.Diagnostics.Failure("import_failed", e); errors.Add($"{Path.GetFileName(file)}: {ImportFailure.Describe(e)}"); }
             }
             RenderRecordings();
             if (errors.Count > 0) MessageBox.Show(string.Join(Environment.NewLine, errors), "Some recordings could not be imported", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-        finally { importing = null; cancelImport.Visible = false; SetBusy(false); pendingLabel.Text = errors.Count > 0 ? "Some imports failed · retry with supported audio" : dirty ? "Validated · save to keep changes" : "Ready"; }
+        finally { importing = null; cancelImport.Visible = false; SetBusy(false); pendingLabel.Text = errors.Count > 0 ? "Import failed · see details and Diagnostics" : dirty ? "Validated · save to keep changes" : "Ready"; }
     }
     private async Task SaveAsync()
     {

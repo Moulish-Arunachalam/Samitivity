@@ -96,6 +96,31 @@ public sealed class WindowsIntegrationTests(Xunit.Abstractions.ITestOutputHelper
         Assert.NotSame(first, await backend.PrepareAsync(note, default));
         log.WriteLine($"Synthetic {extension} preparation only: cold={cold:F2}ms warm={warm:F2}ms. No audio device or audible timing measured.");
     }
+    [Theory]
+    [InlineData("m4a", 44100, 1)] [InlineData("m4a", 48000, 2)]
+    [InlineData("mp3", 44100, 2)] [InlineData("wav", 22050, 1)]
+    public async Task ProductionImportSurvivesCommitAndReopenWithoutChangingOriginalBytes(string extension, int rate, int channels)
+    {
+        var wav = SyntheticWave(rate, channels);
+        var path = Path.Combine(root, "synthetic recording #1." + extension);
+        if (extension == "wav") File.Copy(wav, path);
+        else
+        {
+            using var reader = new WaveFileReader(wav);
+            if (extension == "m4a") MediaFoundationEncoder.EncodeToAac(reader, path);
+            else MediaFoundationEncoder.EncodeToMp3(reader, path);
+        }
+        var original = File.ReadAllBytes(path); var category = Guid.NewGuid(); var data = Path.Combine(root, "managed");
+        var library = new LibraryService(data, new WindowsAudioValidator());
+        // Same Task.Run -> Stage -> WindowsAudioValidator path as ManagementForm, then Save's Commit.
+        using var staged = await Task.Run(() => library.Stage(path));
+        Assert.True(library.Commit(category, staged));
+        var reopened = new LibraryService(data, new WindowsAudioValidator());
+        var recording = Assert.Single(reopened.GetRecordings(category));
+        Assert.Equal(original, File.ReadAllBytes(recording.FullPath)); Assert.Equal(original, File.ReadAllBytes(path));
+        using var backend = new WindowsAudioBackend();
+        Assert.NotNull(await backend.PrepareAsync(recording, default));
+    }
     [Fact] public void SmallImportAndMetadataSaveReportIndependentTimings()
     {
         var path = SyntheticWave(); var library = new LibraryService(Path.Combine(root, "data"), new WindowsAudioValidator());

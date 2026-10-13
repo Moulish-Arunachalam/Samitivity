@@ -8,6 +8,22 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        try { return Run(args); }
+        catch (Exception e)
+        {
+            // Includes managed startup failures before tray initialization. Native host failures require host tracing.
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(DataDirectory, "logs"));
+                File.WriteAllText(Path.Combine(DataDirectory, "logs", "last-error.txt"), Samitivity.Core.Diagnostics.FailureSummary(e));
+            }
+            catch (Exception loggingError) when (loggingError is IOException or UnauthorizedAccessException) { }
+            if (args.Contains("--configure")) MessageBox.Show("Samitivity could not start. Collect logs/last-error.txt from your LittleNotes folder.", "Samitivity");
+            return 1;
+        }
+    }
+    private static int Run(string[] args)
+    {
         Samitivity.Core.Diagnostics.Mark("process_entry");
         ApplicationConfiguration.Initialize();
         Directory.CreateDirectory(DataDirectory);
@@ -37,6 +53,7 @@ internal static class Program
             return 0;
         }
         DiagnosticsStart();
+        Samitivity.Core.Diagnostics.Mark($"environment:os={Environment.OSVersion.Version}:process={System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}:runtime={Environment.Version}");
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
         try { using var context = new TrayApplication(args.Contains("--configure")); Application.Run(context); return 0; }
         catch (Exception e)

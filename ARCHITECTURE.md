@@ -6,7 +6,7 @@ Names use **Samitivity** consistently; `LittleNotes` is retained only as the req
 
 Runtime dependency: NAudio.Wasapi 2.2.1 and its NAudio.Core 2.2.1 dependency. These provide a small, established Media Foundation/WASAPI surface. Versions and transitive hashes are locked. No codec download or transcoding fallback exists. Newer NAudio major releases need explicit regression testing rather than an automatic upgrade.
 
-Target: native Windows x64 laptops with an audio endpoint and Media Foundation. Windows 11 is the primary acceptance platform. Windows 10 22H2 is a compatibility candidate, subject to applicable Windows/.NET support and device testing. Windows 7/8, 32-bit Windows, S mode restrictions, Windows N without media components, and arbitrary managed corporate policies are outside the guarantee. ARM64 x64 emulation is not validated. PC brands do not change the design; firmware, keyboard layouts, audio drivers, and Windows editions still affect it.
+Target: native Windows x64 laptops with an audio endpoint and Media Foundation. Windows 10 and Windows 11 x64 are the intended targets. The installer admits all Windows 10 builds as of 0.1.2, including 1909; actual runtime/audio compatibility on historical builds requires separate testing. See docs/COMPATIBILITY-0.1.2.md for the distinction from Microsoft lifecycle support. Windows 7/8, 32-bit Windows, S mode restrictions, Windows N without media components, and arbitrary managed corporate policies are outside the guarantee. ARM64 x64 emulation is not validated. PC brands do not change the design; firmware, keyboard layouts, audio drivers, and Windows editions still affect it.
 
 ## Hotkey and playback flow
 
