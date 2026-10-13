@@ -58,11 +58,14 @@ public sealed class WindowsAudioBackend : IAudioBackend, IPlaybackNotifications,
 
     internal async Task<PreparedAudio?> PrepareAsync(Recording recording, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
+        var info = new FileInfo(recording.FullPath);
+        var key = recording.FullPath + ":" + info.Length + ":" + info.LastWriteTimeUtc.Ticks;
+        // A cached request must not wait behind an unrelated slow native warm-up.
+        if (cache.Get(key) is { } ready) { Diagnostics.Mark("audio_cache_hit"); return ready; }
         await decode.WaitAsync(token).ConfigureAwait(false);
         try
         {
-            var info = new FileInfo(recording.FullPath);
-            var key = recording.FullPath + ":" + info.Length + ":" + info.LastWriteTimeUtc.Ticks;
             if (cache.Get(key) is { } hit) { Diagnostics.Mark("audio_cache_hit"); return hit; }
             // Long recordings retain bounded streaming instead of consuming the cache.
             if (recording.Duration.TotalSeconds > 30) return null;
