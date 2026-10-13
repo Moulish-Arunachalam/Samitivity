@@ -14,7 +14,10 @@ internal sealed class ManagementForm : Form
     private readonly ShortcutEditor stopShortcut = new();
     private readonly ListView recordings = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, Dock = DockStyle.Fill, HideSelection = false };
     private readonly TextBox status = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
-    private readonly Label pendingLabel = new() { AutoSize = true, Text = "All changes saved" };
+    private readonly Label pendingLabel = new() { AutoSize = true, Text = "All changes saved", Padding = new(10), Font = new("Segoe UI", 11, FontStyle.Bold) };
+    private readonly ProgressBar progress = new() { Width = 140, Height = 8, Visible = false, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 25 };
+    private readonly Button cancelImport = new() { Text = "Cancel import", AutoSize = true, Visible = false };
+    private CancellationTokenSource? importing;
     private readonly Button save = new() { Text = "Save", AutoSize = true };
     private readonly List<Control> mutationControls = [];
     private bool dirty;
@@ -24,20 +27,22 @@ internal sealed class ManagementForm : Form
     public ManagementForm(TrayApplication app)
     {
         this.app = app; draft = app.Config.Copy();
-        Text = "Samitivity · Configure"; Icon = SystemIcons.Information; MinimumSize = new(880, 690); Size = new(1000, 760); StartPosition = FormStartPosition.CenterScreen;
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new(16), ColumnCount = 2, RowCount = 6 };
-        layout.ColumnStyles.Add(new(SizeType.Absolute, 190)); layout.ColumnStyles.Add(new(SizeType.Percent, 100));
-        layout.RowStyles.Add(new(SizeType.Absolute, 36)); layout.RowStyles.Add(new(SizeType.Absolute, 112)); layout.RowStyles.Add(new(SizeType.Percent, 100));
-        layout.RowStyles.Add(new(SizeType.Absolute, 74)); layout.RowStyles.Add(new(SizeType.Absolute, 110)); layout.RowStyles.Add(new(SizeType.Absolute, 46));
+        Text = "Samitivity · Configure"; Icon = SystemIcons.Information; MinimumSize = new(960, 680); Size = new(1080, 740);
+        Font = new("Segoe UI", 10); BackColor = Color.FromArgb(249, 247, 243); ForeColor = Color.FromArgb(49, 46, 56);
+        AutoScaleMode = AutoScaleMode.Dpi; StartPosition = FormStartPosition.CenterScreen;
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new(24), ColumnCount = 2, RowCount = 6 };
+        layout.ColumnStyles.Add(new(SizeType.Absolute, 210)); layout.ColumnStyles.Add(new(SizeType.Percent, 100));
+        layout.RowStyles.Add(new(SizeType.Absolute, 64)); layout.RowStyles.Add(new(SizeType.Absolute, 130)); layout.RowStyles.Add(new(SizeType.Percent, 100));
+        layout.RowStyles.Add(new(SizeType.Absolute, 100)); layout.RowStyles.Add(new(SizeType.Absolute, 150)); layout.RowStyles.Add(new(SizeType.Absolute, 62));
         Controls.Add(layout);
-        var heading = new Label { Text = "Your voice notes · private and offline", Font = new(Font, FontStyle.Bold), AutoSize = true };
+        var heading = new Label { Text = "Samitivity   /   your little moments", Font = new("Segoe UI Semibold", 22), AutoSize = true };
         layout.Controls.Add(heading, 0, 0); layout.SetColumnSpan(heading, 2);
         layout.Controls.Add(categories, 0, 1); layout.SetRowSpan(categories, 2);
         var edit = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         edit.Controls.Add(name); edit.Controls.Add(shortcut);
         edit.Controls.Add(new Label { AutoSize = true, Text = "Win combinations may be reserved; Ctrl+Alt may act as AltGr on some layouts." });
         layout.Controls.Add(edit, 1, 1);
-        recordings.Columns.Add("Recording", 450); recordings.Columns.Add("Duration", 90); recordings.Columns.Add("Change", 95);
+        recordings.Columns.Add("Recording", 380); recordings.Columns.Add("Duration", 90); recordings.Columns.Add("Change", 170);
         layout.Controls.Add(recordings, 1, 2);
         var categoryActions = new FlowLayoutPanel { Dock = DockStyle.Fill };
         categoryActions.Controls.Add(Mutate("New category", AddCategory)); categoryActions.Controls.Add(Mutate("Remove category", RemoveCategory)); layout.Controls.Add(categoryActions, 0, 3);
@@ -47,6 +52,7 @@ internal sealed class ManagementForm : Form
         actions.Controls.Add(Button("Stop", () => _ = app.Player.Stop()));
         actions.Controls.Add(Mutate("Delete", DeleteRecording));
         actions.Controls.Add(Button("Open folder", () => { if (Selected is { } c) Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, ArgumentList = { app.Library.CategoryFolder(c.Id) } }); }));
+        actions.Controls.Add(Button("Diagnostics", () => Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, ArgumentList = { Path.Combine(Program.DataDirectory, "logs") } })));
         actions.Controls.Add(Button("Refresh", async () => { await app.RefreshAsync(); RenderRecordings(); }));
         layout.Controls.Add(actions, 1, 3);
         var statusArea = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
@@ -57,14 +63,53 @@ internal sealed class ManagementForm : Form
         layout.Controls.Add(statusArea, 0, 4); layout.SetColumnSpan(statusArea, 2);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
         save.Click += async (_, _) => await SaveAsync(); footer.Controls.Add(save);
-        footer.Controls.Add(Button("Close", Close)); footer.Controls.Add(pendingLabel); layout.Controls.Add(footer, 0, 5); layout.SetColumnSpan(footer, 2);
+        footer.Controls.Add(Button("Close", Close)); footer.Controls.Add(pendingLabel); footer.Controls.Add(progress); footer.Controls.Add(cancelImport);
+        cancelImport.Click += (_, _) => { importing?.Cancel(); pendingLabel.Text = "Cancelling import…"; }; layout.Controls.Add(footer, 0, 5); layout.SetColumnSpan(footer, 2);
         mutationControls.AddRange([categories, name, shortcut, stopShortcut, save]);
         categories.SelectedIndexChanged += (_, _) => { if (!loading) LoadCategory(); };
         name.TextChanged += (_, _) => EditCategory(); shortcut.Changed += EditCategory;
         stopShortcut.Changed += () => { if (!loading) { draft = draft with { StopShortcut = stopShortcut.Value }; MarkDirty(); } };
         FormClosing += (_, e) => { if (busy || !CanDiscard()) e.Cancel = true; };
+        StyleControls(this);
+        categories.BorderStyle = BorderStyle.None; categories.ItemHeight = 42; categories.DrawMode = DrawMode.OwnerDrawFixed;
+        categories.DrawItem += DrawCategory;
+        recordings.BorderStyle = BorderStyle.None; recordings.BackColor = Color.White;
+        status.BorderStyle = BorderStyle.None; status.BackColor = BackColor;
         app.Updated += UpdateStatus;
         LoadDraft(); UpdateStatus();
+    }
+    private static void StyleControls(Control parent)
+    {
+        foreach (Control control in parent.Controls)
+        {
+            if (control is Button button)
+            {
+                button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0;
+                button.BackColor = Color.FromArgb(228, 220, 241); button.ForeColor = Color.FromArgb(49, 46, 56);
+                button.Padding = new(9, 5, 9, 5); button.Margin = new(3, 4, 7, 4);
+                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(212, 199, 232);
+                button.Resize += (_, _) =>
+                {
+                    using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                    var bounds = button.ClientRectangle; const int radius = 12;
+                    if (bounds.Width < radius || bounds.Height < radius) return;
+                    path.AddArc(0, 0, radius, radius, 180, 90); path.AddArc(bounds.Width-radius, 0, radius, radius, 270, 90);
+                    path.AddArc(bounds.Width-radius, bounds.Height-radius, radius, radius, 0, 90); path.AddArc(0, bounds.Height-radius, radius, radius, 90, 90); path.CloseFigure();
+                    var old = button.Region; button.Region = new Region(path); old?.Dispose();
+                };
+            }
+            StyleControls(control);
+        }
+    }
+    private void DrawCategory(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0) return;
+        using var background = new SolidBrush(e.State.HasFlag(DrawItemState.Selected) ? Color.FromArgb(228, 220, 241) : BackColor);
+        e.Graphics.FillRectangle(background, e.Bounds);
+        TextRenderer.DrawText(e.Graphics, ((Category)categories.Items[e.Index]).Name, Font,
+            new Rectangle(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height), ForeColor,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        e.DrawFocusRectangle();
     }
     private static Button Button(string text, Action action)
     {
@@ -106,7 +151,7 @@ internal sealed class ManagementForm : Form
             recordings.Items.Add(row);
         }
         foreach (var pending in imports.Where(x => x.Category == c.Id))
-            recordings.Items.Add(new ListViewItem([pending.Import.OriginalName, pending.Import.Duration.ToString(@"hh\:mm\:ss"), "Import on Save"]) { Tag = pending.Import });
+            recordings.Items.Add(new ListViewItem([pending.Import.OriginalName, pending.Import.Duration.ToString(@"hh\:mm\:ss"), "Validated · ready to save"]) { Tag = pending.Import });
         foreach (ListViewItem row in recordings.Items)
             if (Equals(row.Tag, selectedTag)) row.Selected = true;
     }
@@ -137,7 +182,7 @@ internal sealed class ManagementForm : Form
     }
     private void SetBusy(bool value)
     {
-        busy = value;
+        busy = value; progress.Visible = value;
         foreach (var control in mutationControls) control.Enabled = !value && app.Ready;
         name.Enabled = shortcut.Enabled = !value && app.Ready && Selected is not null;
     }
@@ -146,31 +191,36 @@ internal sealed class ManagementForm : Form
         if (Selected is not { } c) return;
         using var picker = new OpenFileDialog { Filter = "Voice recordings|*.m4a;*.mp3;*.wav", Multiselect = true, CheckFileExists = true };
         if (picker.ShowDialog(this) != DialogResult.OK) return;
-        SetBusy(true); var errors = new List<string>();
+        SetBusy(true); using var cancellation = new CancellationTokenSource(); importing = cancellation; cancelImport.Visible = true;
+        var errors = new List<string>(); var completed = 0;
         try
         {
             foreach (var file in picker.FileNames)
             {
-                pendingLabel.Text = "Validating " + Path.GetFileName(file);
-                try { var staged = await Task.Run(() => app.Library.Stage(file)); imports.Add((c.Id, staged)); MarkDirty(); }
+                if (cancellation.IsCancellationRequested) break;
+                pendingLabel.Text = $"Validating recordings — {++completed} of {picker.FileNames.Length}";
+                var itemNumber = completed;
+                var progressText = new Progress<string>(phase => { if (busy) pendingLabel.Text = $"{phase} recordings — {itemNumber} of {picker.FileNames.Length}"; });
+                try { var staged = await Task.Run(() => app.Library.Stage(file, cancellation.Token, progressText)); imports.Add((c.Id, staged)); dirty = true; }
+                catch (OperationCanceledException) { break; }
                 catch (Exception e) { errors.Add($"{Path.GetFileName(file)}: unsupported, damaged or inaccessible ({e.GetType().Name})."); }
             }
             RenderRecordings();
             if (errors.Count > 0) MessageBox.Show(string.Join(Environment.NewLine, errors), "Some recordings could not be imported", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-        finally { SetBusy(false); pendingLabel.Text = dirty ? "Unsaved changes" : "All changes saved"; }
+        finally { importing = null; cancelImport.Visible = false; SetBusy(false); pendingLabel.Text = errors.Count > 0 ? "Some imports failed · retry with supported audio" : dirty ? "Validated · save to keep changes" : "Ready"; }
     }
     private async Task SaveAsync()
     {
         if (!dirty) return;
         try { draft.Validate(); } catch (Exception e) { MessageBox.Show(e.Message, "Check settings"); return; }
-        if (MessageBox.Show("Save settings and apply pending imports and deletions? Playback will stop.", "Save changes", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
-        SetBusy(true);
+        if (MessageBox.Show("Save settings and apply pending imports and deletions? Recording changes will stop playback.", "Save changes", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+        SetBusy(true); pendingLabel.Text = "Saving configuration…";
         try
         {
             await app.SaveAsync(draft.Copy(), imports, deletions);
             foreach (var x in imports) x.Import.Dispose(); imports.Clear(); deletions.Clear();
-            draft = app.Config.Copy(); dirty = false; pendingLabel.Text = "Saved"; LoadDraft();
+            draft = app.Config.Copy(); dirty = false; pendingLabel.Text = "All changes saved"; LoadDraft();
         }
         catch (Exception e)
         {
@@ -179,7 +229,7 @@ internal sealed class ManagementForm : Form
             MessageBox.Show($"Save was only partially applied ({e.GetType().Name}). Check the list and retry. Original files remain safe.", "Save incomplete", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             MarkDirty(); RenderRecordings();
         }
-        finally { SetBusy(false); UpdateStatus(); }
+        finally { SetBusy(false); UpdateStatus(); if (!dirty) pendingLabel.Text = "All changes saved"; }
     }
     public bool CanDiscard()
     {
@@ -187,7 +237,7 @@ internal sealed class ManagementForm : Form
         if (!dirty) return true;
         return MessageBox.Show("Discard unsaved changes and close? Choose No to return and Save.", "Unsaved changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
     }
-    private void UpdateStatus() { if (!IsDisposed) { status.Text = app.Status + Environment.NewLine + app.Details; SetBusy(busy); if (!busy) RenderRecordings(); } }
+    private void UpdateStatus() { if (!IsDisposed) { status.Text = app.Status + Environment.NewLine + app.Details; if (!busy && !dirty) pendingLabel.Text = app.Status; SetBusy(busy); if (!busy) RenderRecordings(); } }
     protected override void Dispose(bool disposing)
     {
         if (disposing) { app.Updated -= UpdateStatus; foreach (var x in imports) x.Import.Dispose(); }

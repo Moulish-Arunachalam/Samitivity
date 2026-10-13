@@ -64,8 +64,10 @@ public sealed class LibraryService : IRecordingSource
         var path = Path.Combine(root, "VoiceNotes", id.ToString("N"));
         Directory.CreateDirectory(path); RejectLinks(path); return path;
     }
-    public StagedImport Stage(string source, CancellationToken cancellationToken = default)
+    public StagedImport Stage(string source, CancellationToken cancellationToken = default, IProgress<string>? progress = null)
     {
+        var started = Diagnostics.Now;
+        progress?.Report("Importing");
         source = Path.GetFullPath(source);
         if (source.StartsWith(@"\\", StringComparison.Ordinal) || source.StartsWith("//", StringComparison.Ordinal) ||
             (OperatingSystem.IsWindows() && new DriveInfo(Path.GetPathRoot(source)!).DriveType == DriveType.Network))
@@ -90,10 +92,15 @@ public sealed class LibraryService : IRecordingSource
                 }
                 output.Flush(true);
             }
+            Diagnostics.Mark("import_copy", started);
+            progress?.Report("Validating");
+            var validation = Diagnostics.Now;
             var duration = validator.Validate(target, cancellationToken);
+            Diagnostics.Mark("import_validation", validation);
             if (duration <= TimeSpan.Zero || duration > TimeSpan.FromHours(2)) throw new InvalidDataException("Recording must be shorter than two hours and contain audio.");
             using var stream = File.OpenRead(target);
             var hash = Convert.ToHexString(SHA256.HashData(stream));
+            Diagnostics.Mark("import_total", started);
             return new(target, SafeName(Path.GetFileName(source)), hash, duration);
         }
         catch { if (File.Exists(target)) File.Delete(target); throw; }
@@ -151,7 +158,7 @@ public sealed class LibraryService : IRecordingSource
                     { if (newWarnings.Count < 50) newWarnings.Add($"{Path.GetFileName(path)}: unavailable or unsupported ({e.GetType().Name})."); }
                 }
             }
-            store.Save(updated);
+            if (!previous.Recordings.SequenceEqual(updated.Recordings)) store.Save(updated);
             lock (gate) { index = updated; warnings.Clear(); warnings.AddRange(newWarnings); }
         }
     }
@@ -159,7 +166,7 @@ public sealed class LibraryService : IRecordingSource
     {
         lock (gate)
         {
-            var folder = CategoryFolder(category);
+            var folder = Path.Combine(root, "VoiceNotes", category.ToString("N"));
             return index.Recordings.Where(x => x.CategoryId == category).GroupBy(x => x.Id).Select(g => g.First())
                 .Select(x => new Recording(x.Id, category, x.FileName, Path.Combine(folder, x.FileName), TimeSpan.FromTicks(x.DurationTicks))).ToArray();
         }

@@ -16,7 +16,7 @@ Install the SDK version listed in `global.json`. On a Windows build host:
 ./scripts/package.ps1
 ```
 
-The second command downloads **build tooling**, verifies its pinned hash/publisher, and installs it in `.tools/inno`. It is not run on the recipient's PC. The resulting installer is `artifacts/installer/Samitivity-0.1.0-win-x64-setup.exe`. Build output is unsigned unless you arrange legitimate signing.
+The second command downloads **build tooling**, verifies its pinned hash/publisher, and installs it in `.tools/inno`. It is not run on the recipient's PC. The resulting installer is `artifacts/installer/Samitivity-0.1.1-win-x64-setup.exe`. Build output is unsigned unless you arrange legitimate signing.
 
 Alternatively, push this repository to GitHub and open **Actions → Build and test Samitivity**. The workflow compiles/tests on a Windows runner and uploads **Samitivity-win-x64-installer**, retained for 14 days. Download and unzip the artifact to get the installer. Logs and `.trx` reports are separate artifacts. The current local checkout has no configured GitHub remote, so Windows CI has not yet been run.
 

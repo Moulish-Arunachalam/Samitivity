@@ -7,12 +7,13 @@ using Samitivity.Windows;
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 namespace Samitivity.Windows.Tests;
 
-public sealed class WindowsIntegrationTests : IDisposable
+public sealed class WindowsIntegrationTests(Xunit.Abstractions.ITestOutputHelper log) : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "SamitivityWindowsTests-" + Guid.NewGuid().ToString("N"));
-    public WindowsIntegrationTests() => Directory.CreateDirectory(root);
+
     private string SyntheticWave(int rate = 44100, int channels = 1)
     {
+        Directory.CreateDirectory(root);
         var path = Path.Combine(root, Guid.NewGuid() + ".wav");
         using var writer = new WaveFileWriter(path, new WaveFormat(rate, 16, channels));
         for (var n = 0; n < rate / 4; n++)
@@ -41,6 +42,7 @@ public sealed class WindowsIntegrationTests : IDisposable
     [Theory] [InlineData("m4a")] [InlineData("mp3")] [InlineData("wav")]
     public void CorruptAudioIsRejectedByNativeDecoder(string extension)
     {
+        Directory.CreateDirectory(root);
         var path = Path.Combine(root, "corrupt." + extension); File.WriteAllText(path, "not an audio stream");
         Assert.ThrowsAny<Exception>(() => new WindowsAudioValidator().Validate(path, default));
         var library = new LibraryService(Path.Combine(root, "data"), new WindowsAudioValidator());
@@ -73,5 +75,50 @@ public sealed class WindowsIntegrationTests : IDisposable
         }
         finally { UnregisterHotKey(IntPtr.Zero, 29001); }
     }
-    public void Dispose() => Directory.Delete(root, true);
+    [Theory] [InlineData("m4a")] [InlineData("mp3")] [InlineData("wav")]
+    public async Task PreparationReusesPcmAndInvalidatesChangedFile(string extension)
+    {
+        var wav = SyntheticWave(); var path = wav;
+        if (extension != "wav")
+        {
+            path = Path.Combine(root, "prepared." + extension);
+            using var reader = new WaveFileReader(wav);
+            if (extension == "m4a") MediaFoundationEncoder.EncodeToAac(reader, path);
+            else MediaFoundationEncoder.EncodeToMp3(reader, path);
+        }
+        using var backend = new WindowsAudioBackend();
+        var note = new Recording("synthetic", Guid.NewGuid(), "synthetic", path, TimeSpan.FromSeconds(0.25));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var first = await backend.PrepareAsync(note, default); var cold = clock.Elapsed.TotalMilliseconds;
+        clock.Restart(); var second = await backend.PrepareAsync(note, default); var warm = clock.Elapsed.TotalMilliseconds;
+        Assert.NotNull(first); Assert.Same(first, second); Assert.NotEmpty(first.Bytes);
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddSeconds(2));
+        Assert.NotSame(first, await backend.PrepareAsync(note, default));
+        log.WriteLine($"Synthetic {extension} preparation only: cold={cold:F2}ms warm={warm:F2}ms. No audio device or audible timing measured.");
+    }
+    [Fact] public void SmallImportAndMetadataSaveReportIndependentTimings()
+    {
+        var path = SyntheticWave(); var library = new LibraryService(Path.Combine(root, "data"), new WindowsAudioValidator());
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        using var staged = library.Stage(path); var import = clock.Elapsed.TotalMilliseconds;
+        clock.Restart(); Assert.True(library.Commit(Guid.NewGuid(), staged)); var commit = clock.Elapsed.TotalMilliseconds;
+        var store = new AtomicJsonStore<AppConfig>(Path.Combine(root, "config.json"), AppConfig.Defaults, c => c.Validate());
+        store.Save(AppConfig.Defaults()); clock.Restart(); store.Save(AppConfig.Defaults());
+        log.WriteLine($"Synthetic WAV import={import:F2}ms commit={commit:F2}ms metadata persistence={clock.Elapsed.TotalMilliseconds:F2}ms. CI disk only; no UI or physical audio assertion.");
+    }
+    [Fact] public async Task CancelledPreparationDoesNotOpenMissingFile()
+    {
+        using var backend = new WindowsAudioBackend(); using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        var note = new Recording("missing", Guid.NewGuid(), "missing", Path.Combine(root, "missing.wav"), TimeSpan.FromSeconds(1));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => backend.PrepareAsync(note, cancellation.Token));
+    }
+    [Fact] public void SwitchingProviderReportsFirstDataOnceAndDropsPreviousSource()
+    {
+        var format = new WaveFormat(44100, 16, 1); var provider = new SwitchingProvider(format); var reads = 0;
+        using var first = new RawSourceWaveStream(new MemoryStream(new byte[128]), format);
+        provider.Set(first, () => reads++); var buffer = new byte[32];
+        Assert.Equal(32, provider.Read(buffer, 0, 32)); provider.Read(buffer, 0, 32); Assert.Equal(1, reads);
+        provider.Set(null); Assert.Equal(0, provider.Read(buffer, 0, 32));
+    }
+    public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }

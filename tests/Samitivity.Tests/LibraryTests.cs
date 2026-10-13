@@ -75,6 +75,16 @@ public sealed class LibraryTests : TempTest
         library.Delete(category, original.Id); library.Refresh([category]);
         Assert.Empty(library.GetRecordings(category)); Assert.Equal(2, Directory.GetFiles(Path.Combine(Root, "data", "Trash")).Length);
     }
+    [Fact] public void UnchangedRefreshDoesNotRewriteIndexOrDecode()
+    {
+        var validator = new Validator(); var library = Library(validator); var category = Guid.NewGuid();
+        using (var staged = library.Stage(Source("small.m4a"))) library.Commit(category, staged);
+        var path = Path.Combine(Root, "data", "library.json");
+        var sentinel = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc); File.SetLastWriteTimeUtc(path, sentinel);
+        library.Refresh([category]); library.Refresh([category]);
+        Assert.Equal(sentinel, File.GetLastWriteTimeUtc(path)); Assert.Equal(1, validator.Calls);
+        var reopened = Library(validator); Assert.Single(reopened.GetRecordings(category)); Assert.Equal(1, validator.Calls);
+    }
     private sealed class BlockingValidator : IAudioValidator
     {
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

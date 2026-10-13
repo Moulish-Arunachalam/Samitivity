@@ -51,6 +51,16 @@ public sealed class PersistenceAndConfigTests : TempTest
         new Shortcut(Modifiers.Control | Modifiers.Alt, 8).Validate();
         new Shortcut(Modifiers.Control | Modifiers.Shift, 46).Validate();
     }
+    [Fact] public void VersionOneConfigurationRemainsCompatibleWithoutMigration()
+    {
+        var path = Path.Combine(Root, "config.json");
+        File.WriteAllText(path, """
+        {"Version":1,"Categories":[{"Id":"05c22a8f-210d-4dab-bc9a-116a9c236101","Name":"Personal name","Shortcut":{"Modifiers":3,"Key":83}}],"StopShortcut":{"Modifiers":3,"Key":8}}
+        """);
+        var original = Store.Load(); Assert.Null(original.Warning); Store.Save(original.Value);
+        Assert.Equal(1, Store.Load().Value.Version); Assert.Equal("Personal name", Assert.Single(Store.Load().Value.Categories).Name);
+        Assert.Equal(new Shortcut(Modifiers.Control | Modifiers.Alt, 8), Store.Load().Value.StopShortcut);
+    }
     [Fact] public void SemanticallyCorruptStateRecovers()
     {
         var path = Path.Combine(Root, "state.json"); File.WriteAllText(path, "{\"Categories\":null}");

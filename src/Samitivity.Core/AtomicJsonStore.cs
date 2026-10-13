@@ -22,11 +22,13 @@ public sealed class AtomicJsonStore<T>(string path, Func<T> defaults, Action<T> 
     {
         lock (gate)
         {
+            var started = Diagnostics.Now;
             validate(value);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
             // Never replace a good backup with a damaged primary.
-            if (TryRead(path, out var previous)) WriteAtomic(path + ".bak", previous!);
-            WriteAtomic(path, value);
+            var backup = TryRead(path, out _) ? path + ".bak" : null;
+            WriteAtomic(path, value, backup);
+            Diagnostics.Mark("atomic_persistence", started);
         }
     }
     private bool TryRead(string file, out T? value)
@@ -41,14 +43,15 @@ public sealed class AtomicJsonStore<T>(string path, Func<T> defaults, Action<T> 
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or ArgumentException) { return false; }
     }
-    private static void WriteAtomic(string file, T value)
+    private static void WriteAtomic(string file, T value, string? backup)
     {
         var temp = file + ".tmp-" + Guid.NewGuid().ToString("N");
         try
         {
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             { JsonSerializer.Serialize(stream, value, Options); stream.Flush(true); }
-            File.Move(temp, file, true);
+            if (backup is not null) File.Replace(temp, file, backup, true);
+            else File.Move(temp, file, true);
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }

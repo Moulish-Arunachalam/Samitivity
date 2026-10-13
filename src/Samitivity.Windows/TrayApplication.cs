@@ -16,12 +16,15 @@ internal sealed class TrayApplication : ApplicationContext
     private readonly FileSystemWatcher watcher;
     private readonly System.Threading.Timer refreshTimer;
     private readonly SemaphoreSlim maintenance = new(1, 1);
-    private readonly AudioDeviceMonitor? devices;
+    private AudioDeviceMonitor? devices;
     private readonly List<string> notices = [];
     private List<string> hotkeyErrors = [];
     private ManagementForm? form;
     private readonly CancellationTokenSource lifetime = new();
     private Task initialization = Task.CompletedTask;
+    private readonly WindowsAudioBackend audio = new();
+    private CancellationTokenSource? warming;
+    private readonly long started = Diagnostics.Now;
     private bool exiting;
     private bool ready;
     private bool saving;
@@ -44,7 +47,7 @@ internal sealed class TrayApplication : ApplicationContext
         var shuffle = new ShuffleEngine(new(Path.Combine(Program.DataDirectory, "state.json"), () => new(), x => x.Validate()));
         if (shuffle.RecoveryWarning is not null) notices.Add(shuffle.RecoveryWarning);
         Library = new(Program.DataDirectory, new WindowsAudioValidator());
-        Player = new(shuffle, Library, new WindowsAudioBackend());
+        Player = new(shuffle, Library, audio);
         Player.StatusChanged += s => Post(() => { if (s.Generation < lastStatusGeneration) return; lastStatusGeneration = s.Generation; Status = s.Message; Updated?.Invoke(); });
         var menu = new ContextMenuStrip();
         menu.Items.Add("Configure", null, (_, _) => ShowConfiguration());
@@ -53,14 +56,13 @@ internal sealed class TrayApplication : ApplicationContext
         menu.Items.Add("Exit Samitivity", null, async (_, _) => await ShutdownAsync());
         tray = new NotifyIcon { Icon = SystemIcons.Information, Text = "Samitivity · private voice notes", ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => ShowConfiguration();
-        hotkeys.Activated += id => { if (exiting) return; if (id is null) _ = Player.Stop(); else if (ready && !saving) _ = Player.Play(id.Value); };
+        hotkeys.Activated += id => { Diagnostics.Mark("shortcut_received"); warming?.Cancel(); if (exiting) return; if (id is null) _ = Player.Stop(); else if (ready && !saving) _ = Player.Play(id.Value); };
         hotkeys.ExplorerRestarted += () => { tray.Visible = false; tray.Visible = true; };
         hotkeyErrors = hotkeys.Apply(Config);
+        Diagnostics.Mark("hotkeys_registered", started);
         showWait = ThreadPool.RegisterWaitForSingleObject(show, (_, _) => Post(ShowConfiguration), null, Timeout.Infinite, false);
         quitWait = ThreadPool.RegisterWaitForSingleObject(quit, (_, _) => Post(async () => await ShutdownAsync()), null, Timeout.Infinite, false);
         SystemEvents.PowerModeChanged += PowerChanged;
-        try { devices = new AudioDeviceMonitor(() => Post(() => { if (!exiting) { _ = Player.Stop(); Status = "Audio device changed · press a shortcut to use the current default."; Updated?.Invoke(); } })); }
-        catch { notices.Add("Audio device notifications unavailable. Each new playback request still opens the Windows default device."); }
         var startup = Path.Combine(Program.DataDirectory, "startup-status.txt");
         notices.Add(File.Exists(startup) ? File.ReadAllText(startup) : "Startup not configured. Use the installer to enable sign-in startup.");
         refreshTimer = new(_ => Post(async () => await RefreshAsync()), null, Timeout.Infinite, Timeout.Infinite);
@@ -73,6 +75,9 @@ internal sealed class TrayApplication : ApplicationContext
     private void Post(Action action) { if (!exiting && !dispatch.IsDisposed) { try { dispatch.BeginInvoke(action); } catch (InvalidOperationException) { } } }
     private async Task InitializeAsync()
     {
+        ready = true; Diagnostics.Mark("startup_ready", started); Updated?.Invoke(); // Registered shortcuts use the persisted index during reconciliation.
+        try { devices = await Task.Run(() => new AudioDeviceMonitor(() => Post(() => { if (!exiting) { audio.Invalidate(); _ = Player.Stop(); Status = "Audio device changed · press a shortcut to use the current default."; Updated?.Invoke(); } }))); }
+        catch { notices.Add("Audio device notifications unavailable. Playback errors reopen the Windows default device."); }
         await RefreshAsync();
         var bundle = Path.Combine(AppContext.BaseDirectory, "BundledVoiceNotes");
         var receipt = Path.Combine(Program.DataDirectory, "bundle-imported-v1.txt");
@@ -96,9 +101,23 @@ internal sealed class TrayApplication : ApplicationContext
             catch (Exception e) { notices.Add($"Bundled import incomplete ({e.GetType().Name}). Import the affected recordings through Configure."); }
         }
         if (exiting) return;
-        ready = true; Status = "Ready · startup is silent"; Updated?.Invoke();
+        ready = true; Status = "Ready · startup is silent"; Diagnostics.Mark("startup_library_reconciled", started); Updated?.Invoke();
+        WarmAudio();
         if (hotkeyErrors.Count > 0 || notices.Any(x => (x.Contains("fallback", StringComparison.OrdinalIgnoreCase) || x.Contains("unavailable", StringComparison.OrdinalIgnoreCase))))
         { tray.BalloonTipTitle = "Samitivity needs a quick check"; tray.BalloonTipText = "Open Configure from the tray to review shortcuts or startup status."; tray.ShowBalloonTip(5000); }
+    }
+    private void WarmAudio()
+    {
+        warming?.Cancel();
+        warming = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        var cancellation = warming;
+        var token = cancellation.Token;
+        var notes = Config.Categories.SelectMany(c => Library.GetRecordings(c.Id)).ToArray();
+        _ = Task.Run(async () =>
+        {
+            try { await audio.WarmAsync(notes, token); }
+            finally { Post(() => { if (ReferenceEquals(warming, cancellation)) warming = null; cancellation.Dispose(); }); }
+        });
     }
     private void LibraryChanged(object sender, FileSystemEventArgs e)
     { try { refreshTimer.Change(750, Timeout.Infinite); } catch (ObjectDisposedException) { } }
@@ -116,8 +135,11 @@ internal sealed class TrayApplication : ApplicationContext
     }
     public async Task SaveAsync(AppConfig config, IReadOnlyList<(Guid Category, StagedImport Import)> imports, IReadOnlyList<(Guid Category, string Id)> deletions)
     {
+        var started = Diagnostics.Now;
         config.Validate(); saving = true;
-        await Player.Stop(); await maintenance.WaitAsync();
+        warming?.Cancel();
+        var mediaChanged = imports.Count > 0 || deletions.Count > 0;
+        if (mediaChanged) { await Player.Stop(); await maintenance.WaitAsync(); }
         try
         {
             // Independent atomic operations; interrupted Save is recoverable, not an all-or-nothing multi-file transaction.
@@ -131,9 +153,10 @@ internal sealed class TrayApplication : ApplicationContext
         finally
         {
             Config = configStore.Load().Value; hotkeyErrors = hotkeys.Apply(Config);
-            ReleaseMaintenance(); saving = false; Updated?.Invoke();
+            if (mediaChanged) ReleaseMaintenance(); saving = false; Updated?.Invoke();
         }
-        await RefreshAsync();
+        Diagnostics.Mark("configuration_save", started);
+        if (mediaChanged) WarmAudio();
     }
     private void ReleaseMaintenance()
     {
@@ -147,6 +170,7 @@ internal sealed class TrayApplication : ApplicationContext
     private void PowerChanged(object sender, PowerModeChangedEventArgs e) => Post(() =>
     {
         if (exiting) return;
+        audio.Invalidate();
         _ = Player.Stop();
         Status = e.Mode == PowerModes.Resume ? "Resumed · ready for the next shortcut" : "Stopped for power transition";
         Updated?.Invoke();
@@ -164,6 +188,7 @@ internal sealed class TrayApplication : ApplicationContext
         exiting = true; lifetime.Cancel(); watcher.EnableRaisingEvents = false;
         tray.Visible = false; form?.Hide();
         await Player.DisposeAsync();
+        audio.Dispose();
         await initialization;
         await maintenance.WaitAsync(); maintenance.Release();
         ExitThread();

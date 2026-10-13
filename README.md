@@ -48,3 +48,7 @@ The workflow in `.github/workflows/windows.yml` tests on macOS and Windows, publ
 Read [ARCHITECTURE.md](ARCHITECTURE.md) for exact policies, [INSTALLATION.md](INSTALLATION.md) for distribution, [SECURITY.md](SECURITY.md) for boundaries, and [TESTING.md](TESTING.md) for the Windows release gate.
 
 Current verification details: [requirements audit](docs/REQUIREMENTS-AUDIT.md), [local build status](docs/BUILD-STATUS.md), and [exact Windows CI/download steps](docs/WINDOWS-CI.md).
+
+## 0.1.1 performance revision
+
+See [performance changes, diagnostics and laptop checklist](docs/PERFORMANCE-0.1.1.md). This revision preserves version-1 data and adds bounded short-audio preparation, reusable output, fewer save operations, and a refreshed native UI. Physical latency targets require laptop measurements.

@@ -92,6 +92,19 @@ public sealed class PlaybackTests : TempTest
         var request = player.Preview(category, "a"); (await audio.Next()).Done.SetResult(); await request;
         Assert.False(File.Exists(Path.Combine(Root, "state.json")));
     }
+    private sealed class PreparingAudio : IAudioBackend
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task PlayAsync(Recording recording, CancellationToken token)
+        { Entered.TrySetResult(); await Task.Delay(Timeout.Infinite, token); }
+    }
+    [Fact] public async Task StopDuringPreparationReturnsIdleWithoutWaitingForAudio()
+    {
+        var category = Guid.NewGuid(); var audio = new PreparingAudio();
+        await using var player = new PlaybackController(Engine(), new Source([Note(category, "a")]), audio);
+        var request = player.Play(category); await audio.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(await player.Stop().WaitAsync(TimeSpan.FromSeconds(2))); Assert.False(await request);
+    }
     [Fact] public async Task DisposeCancelsPlaybackAndIsIdempotent()
     {
         var category = Guid.NewGuid(); var audio = new Audio(); var player = new PlaybackController(Engine(), new Source([Note(category, "a")]), audio);

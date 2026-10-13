@@ -4,9 +4,11 @@ internal static class Program
 {
     public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LittleNotes");
     internal static string InstanceName => @"Global\Samitivity-" + StartupManager.UserId;
+    private static void DiagnosticsStart() { Samitivity.Core.Diagnostics.Start(Path.Combine(DataDirectory, "logs")); }
     [STAThread]
     private static int Main(string[] args)
     {
+        Samitivity.Core.Diagnostics.Mark("process_entry");
         ApplicationConfiguration.Initialize();
         Directory.CreateDirectory(DataDirectory);
         if (args.Contains("--install-startup"))
@@ -34,6 +36,7 @@ internal static class Program
             if (!args.Contains("--background") && EventWaitHandle.TryOpenExisting(InstanceName + "-show", out var show)) { using (show) show.Set(); }
             return 0;
         }
+        DiagnosticsStart();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
         try { using var context = new TrayApplication(args.Contains("--configure")); Application.Run(context); return 0; }
         catch (Exception e)

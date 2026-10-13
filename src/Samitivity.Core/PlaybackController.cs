@@ -7,13 +7,14 @@ public interface IAudioBackend
     // Return only after playback has stopped and all session resources have been released, including on cancellation.
     Task PlayAsync(Recording recording, CancellationToken cancellationToken);
 }
+public interface IPlaybackNotifications { event Action? Submitted; event Action? FirstBufferRead; }
 public enum PlayerPhase { Idle, Loading, Playing, Error }
 public sealed record PlayerStatus(long Generation, PlayerPhase Phase, string Message);
 
 /// <summary>Single worker, one pending latest-wins request; cancellation never starts a concurrent audio session.</summary>
 public sealed class PlaybackController : IAsyncDisposable
 {
-    private sealed record Request(long Generation, Guid? Category, string? PreviewId, TaskCompletionSource<bool> Done);
+    private sealed record Request(long Generation, Guid? Category, string? PreviewId, TaskCompletionSource<bool> Done, long Received);
     private readonly object gate = new();
     private readonly SemaphoreSlim signal = new(0, 1);
     private readonly ShuffleEngine shuffle;
@@ -38,7 +39,8 @@ public sealed class PlaybackController : IAsyncDisposable
             ObjectDisposedException.ThrowIf(disposed, this);
             var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             pending?.Done.TrySetResult(false);
-            pending = new(++generation, category, preview, done);
+            pending = new(++generation, category, preview, done, Diagnostics.Now);
+            Diagnostics.Mark(category is null ? "stop_received" : "request_received", request: generation);
             active?.Cancel();
             if (signal.CurrentCount == 0) signal.Release();
             return done.Task;
@@ -76,8 +78,13 @@ public sealed class PlaybackController : IAsyncDisposable
                     else
                     {
                         cancellation.Token.ThrowIfCancellationRequested();
-                        Report(r, PlayerPhase.Playing, "Playing");
-                        await audio.PlayAsync(note, cancellation.Token).ConfigureAwait(false);
+                        Diagnostics.Mark("recording_selected", r.Received, r.Generation);
+                        void Submitted() { Diagnostics.Mark("request_to_output_submission", r.Received, r.Generation); Report(r, PlayerPhase.Playing, "Playback active"); }
+                        void FirstBufferRead() => Diagnostics.Mark("request_to_first_pcm_read", r.Received, r.Generation);
+                        var notifications = audio as IPlaybackNotifications;
+                        if (notifications is not null) { notifications.Submitted += Submitted; notifications.FirstBufferRead += FirstBufferRead; }
+                        try { await audio.PlayAsync(note, cancellation.Token).ConfigureAwait(false); }
+                        finally { if (notifications is not null) { notifications.Submitted -= Submitted; notifications.FirstBufferRead -= FirstBufferRead; } }
                         Report(r, PlayerPhase.Idle, "Ready");
                     }
                 }
