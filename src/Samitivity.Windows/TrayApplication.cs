@@ -29,6 +29,8 @@ internal sealed class TrayApplication : ApplicationContext
     private bool ready;
     private bool saving;
     private bool refreshRequested;
+    private bool forceRefreshRequested;
+    private int refreshRetries;
     private long lastStatusGeneration;
     public bool Ready => ready;
     public AppConfig Config { get; private set; }
@@ -41,6 +43,8 @@ internal sealed class TrayApplication : ApplicationContext
     {
         _ = dispatch.Handle;
         configStore = new(Path.Combine(Program.DataDirectory, "config.json"), AppConfig.Defaults, c => c.Validate());
+        var migration = Path.Combine(Program.DataDirectory, DataMigration.Receipt);
+        if (Directory.Exists(Path.Combine(Program.DataDirectory, "RecoveredData")) && File.Exists(migration)) notices.Add(File.ReadAllText(migration));
         var loaded = configStore.Load(); Config = loaded.Value;
         if (loaded.Warning is not null) notices.Add(loaded.Warning);
         if (!File.Exists(Path.Combine(Program.DataDirectory, "config.json"))) configStore.Save(Config);
@@ -120,15 +124,21 @@ internal sealed class TrayApplication : ApplicationContext
         });
     }
     private void LibraryChanged(object sender, FileSystemEventArgs e)
-    { try { refreshTimer.Change(750, Timeout.Infinite); } catch (ObjectDisposedException) { } }
-    public async Task RefreshAsync()
+    { Post(() => refreshRetries = 0); try { refreshTimer.Change(750, Timeout.Infinite); } catch (ObjectDisposedException) { } }
+    public async Task RefreshAsync(bool revalidate = false)
     {
         if (exiting) return;
+        forceRefreshRequested |= revalidate;
         if (!await maintenance.WaitAsync(0)) { refreshRequested = true; return; }
+        revalidate = forceRefreshRequested; forceRefreshRequested = false;
         try
         {
             var ids = Config.Categories.Select(x => x.Id).ToArray();
-            await Task.Run(() => Library.Refresh(ids, lifetime.Token)); Updated?.Invoke();
+            await Task.Run(() => Library.Refresh(ids, lifetime.Token, revalidate));
+            if (Library.Warnings.Count > 0 && refreshRetries++ < 3) refreshTimer.Change(2000, Timeout.Infinite);
+            else if (Library.Warnings.Count == 0) refreshRetries = 0;
+            Status = Library.Warnings.Count == 0 ? "Library up to date" : "Some files could not be read · finish copying, then Refresh";
+            Updated?.Invoke();
         }
         catch (Exception e) { Status = $"Library refresh failed ({e.GetType().Name}). Use Refresh to retry."; Updated?.Invoke(); }
         finally { ReleaseMaintenance(); }
@@ -156,6 +166,7 @@ internal sealed class TrayApplication : ApplicationContext
             if (mediaChanged) ReleaseMaintenance(); saving = false; Updated?.Invoke();
         }
         Diagnostics.Mark("configuration_save", started);
+        await RefreshAsync();
         if (mediaChanged) WarmAudio();
     }
     private void ReleaseMaintenance()
@@ -179,6 +190,7 @@ internal sealed class TrayApplication : ApplicationContext
     {
         if (exiting) return;
         if (form is null || form.IsDisposed) form = new(this);
+        _ = RefreshAsync();
         form.Show(); form.WindowState = FormWindowState.Normal; form.Activate();
     }
     private async Task ShutdownAsync()

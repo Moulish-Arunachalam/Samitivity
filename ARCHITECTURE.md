@@ -2,7 +2,7 @@
 
 ## Scope and platform boundary
 
-Names use **Samitivity** consistently; `LittleNotes` is retained only as the requested data-directory name. .NET 10 is the current LTS choice. Native WinForms avoids a web runtime. Windows-specific code is isolated behind `IAudioBackend`, `IAudioValidator`, and `IRecordingSource`. `IRandomSource` allows deterministic tests; production uses bounded cryptographic `GetInt32` calls.
+Names use **Samitivity** consistently; the data directory is `%LOCALAPPDATA%\Samitivity`. .NET 10 is the current LTS choice. Native WinForms avoids a web runtime. Windows-specific code is isolated behind `IAudioBackend`, `IAudioValidator`, and `IRecordingSource`. `IRandomSource` allows deterministic tests; production uses bounded cryptographic `GetInt32` calls.
 
 Runtime dependency: NAudio.Wasapi 2.2.1 and its NAudio.Core 2.2.1 dependency. These provide a small, established Media Foundation/WASAPI surface. Versions and transitive hashes are locked. No codec download or transcoding fallback exists. Newer NAudio major releases need explicit regression testing rather than an automatic upgrade.
 
@@ -37,7 +37,7 @@ Bag order is uniform before history constraints; the final ordering is deliberat
 ## Storage and recovery
 
 ```
-%LOCALAPPDATA%\LittleNotes\
+%LOCALAPPDATA%\Samitivity\
   config.json             categories, display names, shortcuts
   config.json.bak         last valid prior configuration
   state.json[.bak]        shuffle and recent history

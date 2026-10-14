@@ -4,7 +4,7 @@
 
 Use a Windows x64 laptop with built-in Media Foundation and an ordinary Windows audio device. Windows 10 and Windows 11 x64 are the intended targets. Version 0.1.2 removes the old 22H2 installer cutoff, allowing 1909 and earlier Windows 10 builds. Runtime/audio compatibility on each historical build still requires physical testing; see docs/COMPATIBILITY-0.1.2.md. Windows N without media components cannot decode the required formats under the no-extra-installation rule. Windows S mode, managed policies, ARM64 emulation, secure desktops, and remote sessions are not promised. Bluetooth keyboards work through Windows' normal keyboard stack; reconnection and firmware behavior require the actual recipient hardware.
 
-Installation is per user and should not show a UAC elevation prompt. Binaries go to `%LOCALAPPDATA%\Programs\Samitivity`. Notes/settings live separately under `%LOCALAPPDATA%\LittleNotes`. The app starts silently at Windows sign-in. A self-contained .NET runtime is bundled, so the recipient does not install .NET, codecs, or a media player.
+Installation is per user and should not show a UAC elevation prompt. Binaries go to `%LOCALAPPDATA%\Programs\Samitivity`. Notes/settings live separately under `%LOCALAPPDATA%\Samitivity`. The app starts silently at Windows sign-in. A self-contained .NET runtime is bundled, so the recipient does not install .NET, codecs, or a media player.
 
 ## Windows build host or GitHub Actions
 
@@ -60,7 +60,7 @@ Startup is a visible per-user Task Scheduler entry named `Samitivity-<user SID>`
 
 Use the same installer AppId and increase the application/installer version together for releases. An upgrade asks the running app to stop; unresolved unsaved changes prevent replacement. Configuration, history, and notes remain in LocalAppData. Back up that entire data folder before an upgrade if the recordings are irreplaceable; exit Samitivity before copying it for a consistent backup.
 
-Uninstall from Windows Settings → Apps, or the Start menu uninstall shortcut. It requests a clean exit, removes the task/Startup shortcut, and removes application files. User notes, Trash, configuration, and history are preserved. To explicitly erase them, after uninstall delete `%LOCALAPPDATA%\LittleNotes` yourself. This is irreversible; there is no automatic data deletion option.
+Uninstall from Windows Settings → Apps, or the Start menu uninstall shortcut. It requests a clean exit, removes the task/Startup shortcut, and removes application files. User notes, Trash, configuration, and history are preserved. To explicitly erase them, after uninstall delete `%LOCALAPPDATA%\Samitivity` yourself. This is irreversible; there is no automatic data deletion option.
 
 If Windows refuses to remove a startup task, uninstall stops and tells you to remove the Samitivity task before retrying. If a machine policy or service prevents the task service from being accessed at all, ask that machine's administrator to resolve the policy; do not disable security software.
 
@@ -69,3 +69,5 @@ If Windows refuses to remove a startup task, uninstall stops and tells you to re
 An unsigned new executable may trigger SmartScreen. This project does not bypass reputation checks. For a polished gift, use a legitimate Authenticode certificate/signing service, sign the published EXE/DLLs where appropriate, sign the final installer, and timestamp signatures. Keep credentials outside the repository and public CI. Signing establishes publisher identity but does not promise that warnings disappear.
 
 Test the **downloaded final installer**, with its normal mark-of-the-web, on a standard account using default Defender and SmartScreen settings. Record the displayed publisher and warning behavior. If the artifact is flagged, investigate or submit a legitimate false-positive review. Do not request exclusions or protection changes.
+
+Upgrading an older data directory is automatic on normal launch. See [migration and recovery behavior](docs/POLISH-AND-MIGRATION.md), including the case where both data folders already contain files.

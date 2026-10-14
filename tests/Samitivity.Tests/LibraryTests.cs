@@ -85,6 +85,37 @@ public sealed class LibraryTests : TempTest
         Assert.Equal(sentinel, File.GetLastWriteTimeUtc(path)); Assert.Equal(1, validator.Calls);
         var reopened = Library(validator); Assert.Single(reopened.GetRecordings(category)); Assert.Equal(1, validator.Calls);
     }
+    [Theory] [InlineData("voice.MP3")] [InlineData("voice.wav")] [InlineData("voice.m4a")]
+    public void DirectCopyIsIndexedAndPersistedWithoutImport(string filename)
+    {
+        var library = Library(); var category = Guid.NewGuid();
+        File.WriteAllText(Path.Combine(library.CategoryFolder(category), filename), "external audio");
+        library.Refresh([category]);
+        Assert.Equal(filename, Assert.Single(library.GetRecordings(category)).FileName);
+        Assert.Single(Library().GetRecordings(category));
+    }
+    [Fact] public void IncompleteCopyCanBeRetriedAndManualRefreshRevalidatesSameMetadata()
+    {
+        var library = Library(); var category = Guid.NewGuid();
+        var path = Path.Combine(library.CategoryFolder(category), "copy.wav");
+        File.WriteAllText(path, "bad audio"); library.Refresh([category]);
+        Assert.Empty(library.GetRecordings(category));
+        File.WriteAllText(path, "good clip"); library.Refresh([category]);
+        Assert.Single(library.GetRecordings(category)); Assert.Empty(library.Warnings);
+        var timestamp = File.GetLastWriteTimeUtc(path);
+        File.WriteAllText(path, "bad audio"); File.SetLastWriteTimeUtc(path, timestamp);
+        library.Refresh([category], revalidate: true);
+        Assert.Empty(library.GetRecordings(category)); Assert.Single(library.Warnings);
+    }
+    private sealed class DurationValidator(TimeSpan duration) : IAudioValidator
+    { public TimeSpan Validate(string path, CancellationToken token) => duration; }
+    [Theory] [InlineData(0)] [InlineData(7201)]
+    public void ExternalFilesUseImportDurationLimits(int seconds)
+    {
+        var library = new LibraryService(Path.Combine(Root, "data"), new DurationValidator(TimeSpan.FromSeconds(seconds)));
+        var category = Guid.NewGuid(); File.WriteAllText(Path.Combine(library.CategoryFolder(category), "a.wav"), "audio");
+        library.Refresh([category]); Assert.Empty(library.GetRecordings(category)); Assert.Single(library.Warnings);
+    }
     private sealed class BlockingValidator : IAudioValidator
     {
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

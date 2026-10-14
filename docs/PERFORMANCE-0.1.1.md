@@ -16,7 +16,7 @@ These code paths demonstrate redundant work and waits. They do **not** establish
 
 ## Diagnostics
 
-Choose **Configure → Diagnostics**. Logs are in `%LOCALAPPDATA%\LittleNotes\logs\performance.tsv` and `performance.tsv.previous`. They contain monotonic elapsed milliseconds, numeric request IDs, fixed stage names and durations, never filenames, category names or audio. Each session is capped at 20,000 lines and retains one previous log. Events enter a bounded nonblocking queue; disk writes occur on a background worker. A busy logger may drop events. Close the duplicate instance before reproducing; only the primary application writes performance logs.
+Choose **Configure → Diagnostics**. Logs are in `%LOCALAPPDATA%\Samitivity\logs\performance.tsv` and `performance.tsv.previous`. They contain monotonic elapsed milliseconds, numeric request IDs, fixed stage names and durations, never filenames, category names or audio. Each session is capped at 20,000 lines and retains one previous log. Events enter a bounded nonblocking queue; disk writes occur on a background worker. A busy logger may drop events. Close the duplicate instance before reproducing; only the primary application writes performance logs.
 
 Stages include process entry, hotkeys registered, startup ready, reconciliation, shortcut received, selection, preparation, decoder initialization, WASAPI initialization, output submission, first PCM read, import copy/validation/total, atomic persistence and configuration save.
 
@@ -25,7 +25,7 @@ Stages include process entry, hotkeys registered, startup ready, reconciliation,
 To summarize request latency in PowerShell (no installation needed):
 
 ```powershell
-$rows = Import-Csv "$env:LOCALAPPDATA\LittleNotes\logs\performance.tsv" -Delimiter "`t"
+$rows = Import-Csv "$env:LOCALAPPDATA\Samitivity\logs\performance.tsv" -Delimiter "`t"
 $rows | Where-Object stage -eq 'request_to_first_pcm_read' |
     Select-Object request, duration_ms
 ```
@@ -42,7 +42,7 @@ A cache hit performs file metadata checks so modifications/removals are detected
 
 ## Laptop acceptance checklist
 
-1. Back up the LittleNotes folder; install the 0.1.1 installer over 0.1.0. Confirm existing categories, recordings and shortcuts survive. Startup must remain silent.
+1. Back up the Samitivity folder; install the 0.1.1 installer over 0.1.0. Confirm existing categories, recordings and shortcuts survive. Startup must remain silent.
 2. Cold launch: press a category shortcut promptly, then repeat at least twenty times, including after full completion. Record perceived delay and first-PCM-read timings. Targets: warm <150 ms; cold <500 ms where practical. Any unexplained multi-second delay fails acceptance.
 3. Switch categories rapidly and press Emergency Stop (default Ctrl+Alt+Backspace) during preparation and playback. Pass: no overlap, stale playback or unintended restart; silence promptly after buffered audio clears.
 4. Import two real short iPhone M4As, synthetic WAV and MP3; also a corrupt file. Pass: progress is visible, UI and Stop respond, valid files stage safely, corrupt files show errors, cancellation leaves no partial note. Target small-file import <2 seconds; retain exact log results.

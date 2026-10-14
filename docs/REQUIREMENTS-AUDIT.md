@@ -1,6 +1,6 @@
 # Requirements audit — 2026-10-12
 
-This audits the existing implementation; it does not certify Windows behavior. Source was preserved and corrected incrementally. Git has no initial commit and no remote; all source files are untracked, so there is no earlier committed diff baseline. No partial `.orig`/`.rej` files or empty source files were found. Names are consistently Samitivity except the intentionally retained `%LOCALAPPDATA%\LittleNotes` data directory.
+This audits the existing implementation; it does not certify Windows behavior. Source was preserved and corrected incrementally. Git has no initial commit and no remote; all source files are untracked, so there is no earlier committed diff baseline. No partial `.orig`/`.rej` files or empty source files were found. Names are consistently Samitivity including `%LOCALAPPDATA%\Samitivity` data directory.
 
 | Original area | Implemented | Evidence and remaining work |
 | --- | --- | --- |

@@ -123,7 +123,7 @@ public sealed class LibraryService : IRecordingSource
             store.Save(index); return true;
         }
     }
-    public void Refresh(IEnumerable<Guid> categories, CancellationToken cancellationToken = default)
+    public void Refresh(IEnumerable<Guid> categories, CancellationToken cancellationToken = default, bool revalidate = false)
     {
         lock (mutation)
         {
@@ -143,12 +143,16 @@ public sealed class LibraryService : IRecordingSource
                         if (!IsSafeLeaf(info.Name) || info.Length is <= 0 or > MaxFileBytes) throw new InvalidDataException();
                         var old = previous.Recordings.Find(x => x.CategoryId == category && x.FileName == info.Name && x.Length == info.Length && x.ModifiedUtcTicks == info.LastWriteTimeUtc.Ticks);
                         IndexedRecording note;
-                        if (old is not null) note = old;
+                        if (old is not null && !revalidate) note = old;
                         else
                         {
                             var duration = validator.Validate(path, cancellationToken);
+                            if (duration <= TimeSpan.Zero || duration > TimeSpan.FromHours(2)) throw ImportFailure.Reject("duration");
                             using var stream = File.OpenRead(path);
                             var hash = Convert.ToHexString(SHA256.HashData(stream));
+                            var after = new FileInfo(path);
+                            if (after.Length != info.Length || after.LastWriteTimeUtc != info.LastWriteTimeUtc)
+                                throw new IOException("Recording is still being copied. Refresh to retry.");
                             note = new(hash, category, info.Name, info.Length, info.LastWriteTimeUtc.Ticks, duration.Ticks);
                         }
                         updated.Recordings.Add(note);

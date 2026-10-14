@@ -35,7 +35,7 @@ CI now runs the **real installer**, checks bundled runtime files and the install
 
 ## Physical acceptance: Windows 10 1909 first, then 22H2 and Windows 11
 
-1. Record `winver` and whether System type is x64. Use a normal account. Back up `%LOCALAPPDATA%\LittleNotes` if it exists; do not uninstall/delete data before testing an upgrade.
+1. Record `winver` and whether System type is x64. Use a normal account. Back up `%LOCALAPPDATA%\Samitivity` if it exists; do not uninstall/delete data before testing an upgrade.
 2. Download and extract **Samitivity-win-x64-installer** from the successful 0.1.2 Actions run. From Command Prompt in the extracted folder run:
 
    ```bat
@@ -52,7 +52,7 @@ CI now runs the **real installer**, checks bundled runtime files and the install
    & "$env:LOCALAPPDATA\Programs\Samitivity\collect-compatibility.ps1"
    ```
 
-   If script policy blocks it, do not change policy: manually copy `%LOCALAPPDATA%\LittleNotes\logs\performance.tsv`, `.previous`, `last-error.txt` if present, and `startup-status.txt`, plus the winver details. The script otherwise creates `Samitivity-diagnostics` on the desktop, containing selected OS/build/architecture metadata and those logs only. Review before sharing. The separately captured setup log can contain account/install paths; redact them if needed. Never attach personal audio by default.
+   If script policy blocks it, do not change policy: manually copy `%LOCALAPPDATA%\Samitivity\logs\performance.tsv`, `.previous`, `last-error.txt` if present, and `startup-status.txt`, plus the winver details. The script otherwise creates `Samitivity-diagnostics` on the desktop, containing selected OS/build/architecture metadata and those logs only. Review before sharing. The separately captured setup log can contain account/install paths; redact them if needed. Never attach personal audio by default.
 7. If the installed EXE fails before app logs exist, run in Command Prompt:
 
    ```bat

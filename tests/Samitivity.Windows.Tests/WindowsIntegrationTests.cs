@@ -48,6 +48,23 @@ public sealed class WindowsIntegrationTests(Xunit.Abstractions.ITestOutputHelper
         var library = new LibraryService(Path.Combine(root, "data"), new WindowsAudioValidator());
         Assert.ThrowsAny<Exception>(() => library.Stage(path)); Assert.Empty(Directory.GetFiles(Path.Combine(root, "data", ".staging")));
     }
+    [Fact] public async Task DirectCopyIsDecodedIndexedAndReadyForPlayback()
+    {
+        var path = SyntheticWave(); var category = Guid.NewGuid();
+        var library = new LibraryService(Path.Combine(root, "external"), new WindowsAudioValidator());
+        File.Copy(path, Path.Combine(library.CategoryFolder(category), "copied.WAV"));
+        await Task.Run(() => library.Refresh([category], revalidate: true));
+        var note = Assert.Single(library.GetRecordings(category));
+        using var backend = new WindowsAudioBackend();
+        Assert.NotNull(await backend.PrepareAsync(note, default));
+    }
+    [Fact] public void RoseSurfaceLoadsEmbeddedAssetAndPaints()
+    {
+        using var surface = new RoseSurface { Size = new System.Drawing.Size(860, 640) };
+        using var bitmap = new System.Drawing.Bitmap(860, 640);
+        surface.DrawToBitmap(bitmap, surface.ClientRectangle);
+        Assert.NotEqual(bitmap.GetPixel(10, 320), bitmap.GetPixel(430, 320));
+    }
     [Fact] public void StartupTaskIsInteractiveUnelevatedSilentAndBounded()
     {
         var xml = XDocument.Parse(StartupManager.BuildTaskXml(@"C:\Users\A&B\Samitivity.exe", "S-1-5-21-123"));

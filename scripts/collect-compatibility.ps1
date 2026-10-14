@@ -15,7 +15,7 @@ $exe = Join-Path $env:LOCALAPPDATA 'Programs\Samitivity\Samitivity.exe'
     PowerShellVersion = $PSVersionTable.PSVersion.ToString()
     ApplicationVersion = $(if (Test-Path $exe) { (Get-Item $exe).VersionInfo.ProductVersion } else { 'Not installed at default location' })
 } | ConvertTo-Json | Set-Content (Join-Path $OutputDirectory 'environment.json')
-$data = Join-Path $env:LOCALAPPDATA 'LittleNotes'
+$data = Join-Path $env:LOCALAPPDATA 'Samitivity'
 foreach ($leaf in @('performance.tsv','performance.tsv.previous','last-error.txt')) {
     $path = Join-Path (Join-Path $data 'logs') $leaf
     if (Test-Path $path) { Copy-Item $path (Join-Path $OutputDirectory $leaf) -Force }

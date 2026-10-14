@@ -2,7 +2,7 @@ namespace Samitivity.Windows;
 
 internal static class Program
 {
-    public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LittleNotes");
+    public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Samitivity");
     internal static string InstanceName => @"Global\Samitivity-" + StartupManager.UserId;
     private static void DiagnosticsStart() { Samitivity.Core.Diagnostics.Start(Path.Combine(DataDirectory, "logs")); }
     [STAThread]
@@ -18,7 +18,7 @@ internal static class Program
                 File.WriteAllText(Path.Combine(DataDirectory, "logs", "last-error.txt"), Samitivity.Core.Diagnostics.FailureSummary(e));
             }
             catch (Exception loggingError) when (loggingError is IOException or UnauthorizedAccessException) { }
-            if (args.Contains("--configure")) MessageBox.Show("Samitivity could not start. Collect logs/last-error.txt from your LittleNotes folder.", "Samitivity");
+            if (args.Contains("--configure")) MessageBox.Show("Samitivity could not start. Collect logs/last-error.txt from your Samitivity folder.", "Samitivity");
             return 1;
         }
     }
@@ -52,6 +52,7 @@ internal static class Program
             if (!args.Contains("--background") && EventWaitHandle.TryOpenExisting(InstanceName + "-show", out var show)) { using (show) show.Set(); }
             return 0;
         }
+        Samitivity.Core.DataMigration.Run(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LittleNotes"), DataDirectory);
         DiagnosticsStart();
         Samitivity.Core.Diagnostics.Mark($"environment:os={Environment.OSVersion.Version}:process={System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}:runtime={Environment.Version}");
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
@@ -61,7 +62,7 @@ internal static class Program
             // Fixed, bounded diagnostic; no audio paths, filenames, message contents or configuration.
             Directory.CreateDirectory(Path.Combine(DataDirectory, "logs"));
             File.WriteAllText(Path.Combine(DataDirectory, "logs", "last-error.txt"), $"{DateTimeOffset.UtcNow:O} {e.GetType().Name} 0x{e.HResult:X8}");
-            if (args.Contains("--configure")) MessageBox.Show("Samitivity could not start. Your recordings are preserved. Try launching it again; see logs/last-error.txt in your LittleNotes folder.", "Samitivity", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (args.Contains("--configure")) MessageBox.Show("Samitivity could not start. Your recordings are preserved. Try launching it again; see logs/last-error.txt in your Samitivity folder.", "Samitivity", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
         finally { mutex.ReleaseMutex(); }

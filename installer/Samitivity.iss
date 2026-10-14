@@ -73,5 +73,5 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
     if not UninstallSilent then
-      MsgBox('Samitivity has been removed. Your recordings and settings are preserved in ' + ExpandConstant('{localappdata}\LittleNotes') + '. You may delete that folder yourself if you no longer want them.', mbInformation, MB_OK);
+      MsgBox('Samitivity has been removed. Your recordings and settings are preserved in ' + ExpandConstant('{localappdata}\Samitivity') + '. You may delete that folder yourself if you no longer want them.', mbInformation, MB_OK);
 end;
