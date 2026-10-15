@@ -34,7 +34,7 @@ internal sealed class ManagementForm : Form
         AutoScaleMode = AutoScaleMode.Dpi; StartPosition = FormStartPosition.CenterScreen;
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new(16), BackColor = Color.Transparent, ColumnCount = 2, RowCount = 6 };
         layout.ColumnStyles.Add(new(SizeType.Absolute, 180)); layout.ColumnStyles.Add(new(SizeType.Percent, 100));
-        layout.RowStyles.Add(new(SizeType.Absolute, 62)); layout.RowStyles.Add(new(SizeType.Absolute, 98)); layout.RowStyles.Add(new(SizeType.Percent, 100));
+        layout.RowStyles.Add(new(SizeType.Absolute, 62)); layout.RowStyles.Add(new(SizeType.Absolute, 110)); layout.RowStyles.Add(new(SizeType.Percent, 100));
         layout.RowStyles.Add(new(SizeType.Absolute, 96)); layout.RowStyles.Add(new(SizeType.Absolute, 94)); layout.RowStyles.Add(new(SizeType.Absolute, 52));
         var surface = new RoseSurface { Size = ClientSize, Padding = new(24) };
         var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };

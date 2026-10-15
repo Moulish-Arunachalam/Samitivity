@@ -91,10 +91,12 @@ internal sealed class GlassRecordingList : ListView
     protected override void OnPaint(PaintEventArgs e)
     {
         GlassTheme.PaintBackdrop(this, e.Graphics, ClientRectangle, 65);
-        foreach (ListViewItem item in Items)
+        for (var index = TopItem?.Index ?? 0; index < Items.Count; index++)
         {
+            var item = Items[index];
             var row = item.Bounds;
-            if (row.Bottom < 0 || row.Top >= Height) continue;
+            if (row.Top >= Height) break;
+            if (row.Bottom < 0) continue;
             if (item.Selected)
             {
                 using var selected = new SolidBrush(Color.FromArgb(130, GlassTheme.Wine));
