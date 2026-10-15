@@ -40,7 +40,8 @@ public sealed class GlassRenderingTests
                 for (var i = 1; i <= 2; i++)
                 {
                     using var wav = new NAudio.Wave.WaveFileWriter(Path.Combine(folder, $"New Recording {i}.wav"), new NAudio.Wave.WaveFormat(44100, 16, 1));
-                    wav.Write(new byte[44100 * 4], 0, 44100 * 4);
+                    var samples = new byte[44100 * 4]; samples[0] = (byte)i;
+                    wav.Write(samples, 0, samples.Length);
                 }
                 using var app = new TrayApplication(false, root);
                 try
