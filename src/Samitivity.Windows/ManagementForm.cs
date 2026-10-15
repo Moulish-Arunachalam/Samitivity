@@ -86,7 +86,7 @@ internal sealed class ManagementForm : Form
         stopShortcut.Changed += () => { if (!loading) { draft = draft with { StopShortcut = stopShortcut.Value }; MarkDirty(); } };
         FormClosing += (_, e) => { if (busy || !CanDiscard()) e.Cancel = true; };
         StyleControls(this);
-        categories.ItemHeight = 42;
+        categories.ItemHeight = (int)Math.Round(42 * DeviceDpi / 96f);
         name.AccessibleName = "Category name"; categories.AccessibleName = "Categories";
         recordings.AccessibleName = "Recordings"; status.AccessibleName = "Library status and diagnostics";
         app.Updated += UpdateStatus;

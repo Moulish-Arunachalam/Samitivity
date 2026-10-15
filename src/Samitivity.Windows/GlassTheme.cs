@@ -69,6 +69,8 @@ internal sealed class GlassCategoryList : ListBox
         e.Graphics.DrawPath(border, outline);
     }
     protected override void OnSelectedIndexChanged(EventArgs e) { base.OnSelectedIndexChanged(e); Invalidate(); }
+    protected override void OnDpiChangedAfterParent(EventArgs e)
+    { base.OnDpiChangedAfterParent(e); ItemHeight = (int)Math.Round(42 * DeviceDpi / 96f); GlassTheme.Outline(this); Invalidate(); }
     protected override void OnResize(EventArgs e) { base.OnResize(e); GlassTheme.Outline(this); Invalidate(); }
     protected override void WndProc(ref Message m)
     {
@@ -86,7 +88,7 @@ internal sealed class GlassRecordingList : ListView
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         BorderStyle = BorderStyle.None; HeaderStyle = ColumnHeaderStyle.None;
         ForeColor = GlassTheme.Ivory; BackColor = Color.FromArgb(65, 25, 35);
-        rowHeight.ImageSize = new Size(1, 27); SmallImageList = rowHeight;
+        rowHeight.ImageSize = new Size(1, (int)Math.Round(27 * DeviceDpi / 96f)); SmallImageList = rowHeight;
     }
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -116,6 +118,8 @@ internal sealed class GlassRecordingList : ListView
         }
     }
     internal void RefreshBackdrop() { Invalidate(); Parent?.Invalidate(); }
+    protected override void OnDpiChangedAfterParent(EventArgs e)
+    { base.OnDpiChangedAfterParent(e); rowHeight.ImageSize = new Size(1, (int)Math.Round(27 * DeviceDpi / 96f)); RefreshBackdrop(); }
     protected override void OnSelectedIndexChanged(EventArgs e) { base.OnSelectedIndexChanged(e); Invalidate(); }
     protected override void OnResize(EventArgs e)
     {
