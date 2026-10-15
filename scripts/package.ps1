@@ -1,8 +1,15 @@
-param([string]$InnoCompiler = (Join-Path $PSScriptRoot '../.tools/inno/ISCC.exe'), [string]$PrivateBundle)
+param([string]$InnoCompiler = (Join-Path $PSScriptRoot '../.tools/inno/ISCC.exe'), [string]$PrivateBundle, [string]$AppVersion)
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 if (!(Test-Path artifacts/publish/Samitivity.exe)) { throw 'Run scripts/build-windows.ps1 -Publish first.' }
 if (!(Test-Path $InnoCompiler)) { throw 'Run scripts/install-inno.ps1 on this Windows build host first.' }
+if (!$AppVersion) {
+    [xml]$project = Get-Content src/Samitivity.Windows/Samitivity.Windows.csproj
+    $versions = @($project.Project.PropertyGroup.Version | Where-Object { $_ })
+    if ($versions.Count -ne 1) { throw 'Set exactly one application version in Samitivity.Windows.csproj.' }
+    $AppVersion = $versions[0].Trim()
+}
+if ($AppVersion -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') { throw "Invalid installer version: $AppVersion" }
 # ISCC's PE ProductVersion may be 0.0.0.0. Query the loaded compiler engine
 # with a harmless no-output compilation instead. install-inno.ps1 separately
 # authenticates the pinned installer by SHA-256 and Authenticode publisher.
@@ -49,7 +56,7 @@ try {
         if ($audioCount -eq 0) { throw 'Private bundle contains no recordings.' }
         Copy-Item $source artifacts/publish/BundledVoiceNotes -Recurse
     }
-    & $InnoCompiler installer/Samitivity.iss
+    & $InnoCompiler "/DAppVersion=$AppVersion" installer/Samitivity.iss
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
     Get-FileHash artifacts/installer/*.exe -Algorithm SHA256 | Format-Table
 } finally {

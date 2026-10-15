@@ -1,4 +1,6 @@
+#ifndef AppVersion
 #define AppVersion "0.1.2"
+#endif
 [Setup]
 AppId={{85169B43-476B-4788-BA4E-371D86AF384C}
 AppName=Samitivity

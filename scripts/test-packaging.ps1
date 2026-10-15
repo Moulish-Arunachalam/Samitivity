@@ -4,9 +4,10 @@ $ErrorActionPreference = 'Stop'
 $originalLocation = Get-Location
 $originalCi = $env:CI
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('SamitivityPackageTests-' + [Guid]::NewGuid().ToString('N'))
-New-Item "$testRoot/scripts", "$testRoot/artifacts/publish", "$testRoot/installer" -ItemType Directory -Force | Out-Null
+New-Item "$testRoot/scripts", "$testRoot/artifacts/publish", "$testRoot/installer", "$testRoot/src/Samitivity.Windows" -ItemType Directory -Force | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'package.ps1') "$testRoot/scripts/package.ps1"
 Set-Content "$testRoot/artifacts/publish/Samitivity.exe" 'test placeholder; never distributed'
+Set-Content "$testRoot/src/Samitivity.Windows/Samitivity.Windows.csproj" '<Project><PropertyGroup><Version>0.1.2</Version></PropertyGroup></Project>'
 $compiler = Join-Path $testRoot 'fake-compiler.ps1'
 function Set-FakeCompiler([string]$Version = '6.7.3', [int]$ProbeExit = 0, [int]$CompileExit = 0, [switch]$MissingBanner) {
     @'
@@ -80,6 +81,13 @@ try {
     Set-FakeCompiler
     & $package -InnoCompiler $compiler | Out-Null
     Write-Output 'PASS exact engine version accepted despite zero product metadata'
+    Set-FakeCompiler
+    & $package -InnoCompiler $compiler -AppVersion '0.1.1' | Out-Null
+    Write-Output 'PASS release version can be supplied explicitly'
+    $badVersion = $null
+    try { & $package -InnoCompiler $compiler -AppVersion 'latest' | Out-Null } catch { $badVersion = $_.Exception.Message }
+    if (!$badVersion -or $badVersion -notlike '*Invalid installer version*') { throw 'FAIL invalid installer version was accepted' }
+    Write-Output 'PASS invalid installer version is rejected'
 } finally {
     $env:CI = $originalCi
     Set-Location $originalLocation

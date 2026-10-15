@@ -1,5 +1,7 @@
 # Samitivity
 
+[**Download the latest Windows installer**](https://github.com/Moulish-Arunachalam/Samitivity/releases/latest/download/Samitivity-latest-win-x64-setup.exe) · [Browse previous versions](https://github.com/Moulish-Arunachalam/Samitivity/releases)
+
 A private Windows tray companion that plays local voice recordings when you press a global shortcut. Built as a small, offline gift application; no accounts, network client, telemetry, external player, or keyboard hook.
 
 **Status: implemented engineering candidate, not yet validated for gifting.** The solution cross-compiles on macOS and the portable tests run there. Actual Windows playback, installer UI, recovery, and hardware behavior require the acceptance checks in [TESTING.md](TESTING.md). No private voice recordings were provided or added. The public CI installer is an empty library; add your private bundle locally before gifting.
@@ -34,7 +36,9 @@ dotnet build Samitivity.slnx --no-restore -c Release
 
 The runtime application is entirely C#/.NET and Windows native APIs. No Node, Python, browser, FFmpeg, or separately installed .NET runtime is needed by the recipient. The self-contained app bundles its runtime. Development and NuGet restore require internet; the installed app does not.
 
-The workflow in `.github/workflows/windows.yml` tests on macOS and Windows, publishes `win-x64`, compiles an Inno Setup installer, and uploads it as a CI artifact. **This checkout has no remote configured; no Windows CI run has been performed here.** Push it to a repository you control to run the workflow. Real voice assets must stay out of public repositories and CI artifacts.
+GitHub Releases contain a permanent, versioned Windows installer and checksum for each release, plus a stable `Samitivity-latest-win-x64-setup.exe` download that always points to the newest release. Older installers remain on their version's release page. Each release is built from its matching `vMAJOR.MINOR.PATCH` tag after portable and Windows CI pass. To publish a later version, update the app version in `src/Samitivity.Windows/Samitivity.Windows.csproj`, commit and push, then push the matching version tag. The CI Artifacts tab remains available for short-lived build diagnostics; use Releases for downloads. Releases contain the empty-library installer: never include personal voice assets in a public release.
+
+The GitHub repository is private, so the download links require repository access.
 
 ## Repository
 

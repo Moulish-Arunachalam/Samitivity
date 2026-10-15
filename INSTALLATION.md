@@ -6,6 +6,10 @@ Use a Windows x64 laptop with built-in Media Foundation and an ordinary Windows 
 
 Installation is per user and should not show a UAC elevation prompt. Binaries go to `%LOCALAPPDATA%\Programs\Samitivity`. Notes/settings live separately under `%LOCALAPPDATA%\Samitivity`. The app starts silently at Windows sign-in. A self-contained .NET runtime is bundled, so the recipient does not install .NET, codecs, or a media player.
 
+## Download a release
+
+Download the current installer from [Samitivity Releases](https://github.com/Moulish-Arunachalam/Samitivity/releases/latest) or use the [direct latest installer link](https://github.com/Moulish-Arunachalam/Samitivity/releases/latest/download/Samitivity-latest-win-x64-setup.exe). The Releases page keeps prior versioned installers available. Check `SHA256SUMS.txt` beside each download to verify the installer. Published builds are unsigned unless a release explicitly says otherwise.
+
 ## Windows build host or GitHub Actions
 
 Install the SDK version listed in `global.json`. On a Windows build host:
@@ -18,7 +22,7 @@ Install the SDK version listed in `global.json`. On a Windows build host:
 
 The second command downloads **build tooling**, verifies its pinned hash/publisher, and installs it in `.tools/inno`. It is not run on the recipient's PC. The resulting installer is `artifacts/installer/Samitivity-0.1.2-win-x64-setup.exe`. Build output is unsigned unless you arrange legitimate signing.
 
-Alternatively, push this repository to GitHub and open **Actions → Build and test Samitivity**. The workflow compiles/tests on a Windows runner and uploads **Samitivity-win-x64-installer**, retained for 14 days. Download and unzip the artifact to get the installer. Logs and `.trx` reports are separate artifacts. The current local checkout has no configured GitHub remote, so Windows CI has not yet been run.
+Alternatively, push a version tag such as `v0.1.3` after updating the project version to the same `0.1.3` value. The workflow runs portable and Windows tests, builds the installer, and publishes it to GitHub Releases. To rebuild a historical version that predates automated releases, use **Actions → Build and test Samitivity → Run workflow**, leave the branch as `main`, and enter its existing tag (for example `v0.1.1`) in **version_tag**. Build artifacts are retained for 14 days as diagnostics; Releases are the permanent download location.
 
 SDK, package dependencies/lock hashes, CI actions, and Inno compiler are pinned. Scripts reproduce the build procedure; signed installers, timestamps, absolute paths, and hosted-runner images prevent a blanket claim of bit-for-bit reproducibility. Record the commit, build log, SDK/runtime versions, artifact SHA-256, and test report for the actual gift build.
 
