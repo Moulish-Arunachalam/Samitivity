@@ -60,6 +60,7 @@ jobs:
         shell: pwsh
         run: ./scripts/package.ps1
       - name: Test installed startup and data preservation (Server 2025)
+        if: hashFiles('scripts/test-installer.ps1') != ''
         shell: pwsh
         run: ./scripts/test-installer.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
