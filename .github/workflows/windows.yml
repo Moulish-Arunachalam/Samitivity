@@ -1,6 +1,7 @@
 name: Build and test Samitivity
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
   pull_request:
@@ -73,7 +74,9 @@ jobs:
         if: always()
         with:
           name: Samitivity-test-results
-          path: tests/**/TestResults/*.trx
+          path: |
+            tests/**/TestResults/*.trx
+            tests/**/TestResults/*.png
           retention-days: 14
   release:
     name: Publish versioned GitHub release

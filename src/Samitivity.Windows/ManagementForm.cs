@@ -8,17 +8,17 @@ internal sealed class ManagementForm : Form
     private AppConfig draft;
     private readonly List<(Guid Category, StagedImport Import)> imports = [];
     private readonly List<(Guid Category, string Id)> deletions = [];
-    private readonly ListBox categories = new() { Dock = DockStyle.Fill, DisplayMember = "Name" };
-    private readonly TextBox name = new() { Width = 320, MaxLength = 60 };
+    private readonly GlassCategoryList categories = new() { Dock = DockStyle.Fill, DisplayMember = "Name" };
+    private readonly GlassTextInput name = new() { Width = 320, MaxLength = 60 };
     private readonly ShortcutEditor shortcut = new();
     private readonly ShortcutEditor stopShortcut = new();
-    private readonly ListView recordings = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, Dock = DockStyle.Fill, HideSelection = false };
-    private readonly TextBox status = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
+    private readonly GlassRecordingList recordings = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, Dock = DockStyle.Fill, HideSelection = false };
+    private readonly GlassStatus status = new() { Dock = DockStyle.Fill };
     private readonly Label pendingLabel = new() { AutoSize = false, Width = 245, Height = 32, AutoEllipsis = true, Text = "All changes saved", Padding = new(5), Font = new("Segoe UI", 9, FontStyle.Bold) };
     private readonly ProgressBar progress = new() { Width = 140, Height = 8, Visible = false, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 25 };
-    private readonly Button cancelImport = new() { Text = "Cancel import", AutoSize = true, Visible = false };
+    private readonly GlassButton cancelImport = new() { Text = "Cancel import", AutoSize = true, Visible = false };
     private CancellationTokenSource? importing;
-    private readonly Button save = new() { Text = "Save", AutoSize = true };
+    private readonly GlassButton save = new() { Text = "Save", AutoSize = true };
     private readonly List<Control> mutationControls = [];
     private bool dirty;
     private bool loading;
@@ -27,24 +27,36 @@ internal sealed class ManagementForm : Form
     public ManagementForm(TrayApplication app)
     {
         this.app = app; draft = app.Config.Copy();
-        Text = "Samitivity · Configure"; Icon = SystemIcons.Information; ClientSize = new(860, 640);
+        Text = "Samitivity · Configure"; Icon = SystemIcons.Information; ClientSize = new(920, 660);
         FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
-        Font = new("Segoe UI", 9); BackColor = Color.FromArgb(250, 240, 235); ForeColor = Color.FromArgb(79, 30, 41);
+        Font = new("Segoe UI", 9); BackColor = Color.FromArgb(69, 13, 31); ForeColor = GlassTheme.Ivory;
+        AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi; StartPosition = FormStartPosition.CenterScreen;
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new(16), BackColor = Color.Transparent, ColumnCount = 2, RowCount = 6 };
         layout.ColumnStyles.Add(new(SizeType.Absolute, 180)); layout.ColumnStyles.Add(new(SizeType.Percent, 100));
-        layout.RowStyles.Add(new(SizeType.Absolute, 62)); layout.RowStyles.Add(new(SizeType.Absolute, 100)); layout.RowStyles.Add(new(SizeType.Percent, 100));
-        layout.RowStyles.Add(new(SizeType.Absolute, 82)); layout.RowStyles.Add(new(SizeType.Absolute, 94)); layout.RowStyles.Add(new(SizeType.Absolute, 66));
-        var surface = new RoseSurface { Dock = DockStyle.Fill, Padding = new(24) };
-        surface.Controls.Add(layout); Controls.Add(surface);
-        var heading = new Label { Text = "samitivity", Font = new("Segoe Script", 28, FontStyle.Italic), ForeColor = Color.FromArgb(116, 31, 53), AutoSize = true };
+        layout.RowStyles.Add(new(SizeType.Absolute, 62)); layout.RowStyles.Add(new(SizeType.Absolute, 90)); layout.RowStyles.Add(new(SizeType.Percent, 100));
+        layout.RowStyles.Add(new(SizeType.Absolute, 82)); layout.RowStyles.Add(new(SizeType.Absolute, 94)); layout.RowStyles.Add(new(SizeType.Absolute, 52));
+        var surface = new RoseSurface { Size = ClientSize, Padding = new(24) };
+        var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        surface.Controls.Add(layout); viewport.Controls.Add(surface); Controls.Add(viewport);
+        void FitWorkingArea()
+        {
+            viewport.AutoScrollMinSize = surface.Size;
+            var area = Screen.FromControl(this).WorkingArea;
+            Size = new(Math.Min(Width, area.Width - 16), Math.Min(Height, area.Height - 16));
+            recordings.RefreshBackdrop(); categories.Invalidate();
+        }
+        Shown += (_, _) => FitWorkingArea();
+        DpiChanged += (_, _) => BeginInvoke(FitWorkingArea);
+        layout.Layout += (_, _) => recordings.RefreshBackdrop();
+        var heading = new Label { Text = "samitivity", Font = new("Segoe UI", 32, FontStyle.Italic), ForeColor = GlassTheme.Ivory, AutoSize = true };
         layout.Controls.Add(heading, 0, 0); layout.SetColumnSpan(heading, 2);
         layout.Controls.Add(categories, 0, 1); layout.SetRowSpan(categories, 2);
         var edit = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         edit.Controls.Add(name); edit.Controls.Add(shortcut);
         edit.Controls.Add(new Label { AutoSize = true, Text = "Win keys may be reserved. Ctrl+Alt can act as AltGr." });
         layout.Controls.Add(edit, 1, 1);
-        recordings.Columns.Add("Recording", 260); recordings.Columns.Add("Duration", 72); recordings.Columns.Add("Change", 160);
+        recordings.Columns.Add("Recording", 270); recordings.Columns.Add("Duration", 85); recordings.Columns.Add("Change", 200);
         layout.Controls.Add(recordings, 1, 2);
         var categoryActions = new FlowLayoutPanel { Dock = DockStyle.Fill };
         categoryActions.Controls.Add(Mutate("New category", AddCategory)); categoryActions.Controls.Add(Mutate("Remove category", RemoveCategory)); layout.Controls.Add(categoryActions, 0, 3);
@@ -54,7 +66,7 @@ internal sealed class ManagementForm : Form
         actions.Controls.Add(Button("Stop", () => _ = app.Player.Stop()));
         actions.Controls.Add(Mutate("Delete", DeleteRecording));
         actions.Controls.Add(Button("Open folder", () => { if (Selected is { } c) { if (!app.Config.Categories.Any(x => x.Id == c.Id)) { MessageBox.Show("Save this category first, then open its folder to add recordings.", "Samitivity"); return; } Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, ArgumentList = { app.Library.CategoryFolder(c.Id) } }); } }));
-        actions.Controls.Add(Button("Diagnostics", () => Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, ArgumentList = { Path.Combine(Program.DataDirectory, "logs") } })));
+        actions.Controls.Add(Button("Diagnostics", () => Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, ArgumentList = { Path.Combine(app.DataDirectory, "logs") } })));
         actions.Controls.Add(Button("Refresh", async () => { await app.RefreshAsync(revalidate: true); RenderRecordings(); }));
         layout.Controls.Add(actions, 1, 3);
         var statusArea = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
@@ -73,10 +85,9 @@ internal sealed class ManagementForm : Form
         stopShortcut.Changed += () => { if (!loading) { draft = draft with { StopShortcut = stopShortcut.Value }; MarkDirty(); } };
         FormClosing += (_, e) => { if (busy || !CanDiscard()) e.Cancel = true; };
         StyleControls(this);
-        categories.BorderStyle = BorderStyle.None; categories.ItemHeight = 42; categories.DrawMode = DrawMode.OwnerDrawFixed;
-        categories.DrawItem += DrawCategory;
-        recordings.BorderStyle = BorderStyle.None; recordings.BackColor = Color.White;
-        status.BorderStyle = BorderStyle.None; status.BackColor = Color.FromArgb(250, 240, 235);
+        categories.ItemHeight = 42;
+        name.AccessibleName = "Category name"; categories.AccessibleName = "Categories";
+        recordings.AccessibleName = "Recordings"; status.AccessibleName = "Library status and diagnostics";
         app.Updated += UpdateStatus;
         LoadDraft(); UpdateStatus();
     }
@@ -84,39 +95,14 @@ internal sealed class ManagementForm : Form
     {
         foreach (Control control in parent.Controls)
         {
-            if (control is Button button)
-            {
-                button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0;
-                button.BackColor = Color.FromArgb(119, 34, 54); button.ForeColor = Color.White;
-                button.Padding = new(7, 3, 7, 3); button.Margin = new(3);
-                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(151, 51, 73);
-                button.Resize += (_, _) =>
-                {
-                    using var path = new System.Drawing.Drawing2D.GraphicsPath();
-                    var bounds = button.ClientRectangle; const int radius = 12;
-                    if (bounds.Width < radius || bounds.Height < radius) return;
-                    path.AddArc(0, 0, radius, radius, 180, 90); path.AddArc(bounds.Width-radius, 0, radius, radius, 270, 90);
-                    path.AddArc(bounds.Width-radius, bounds.Height-radius, radius, radius, 0, 90); path.AddArc(0, bounds.Height-radius, radius, radius, 90, 90); path.CloseFigure();
-                    var old = button.Region; button.Region = new Region(path); old?.Dispose();
-                };
-            }
+            control.ForeColor = GlassTheme.Ivory;
             if (control is Panel or Label or CheckBox) control.BackColor = Color.Transparent;
             StyleControls(control);
         }
     }
-    private void DrawCategory(object? sender, DrawItemEventArgs e)
-    {
-        if (e.Index < 0) return;
-        using var background = new SolidBrush(e.State.HasFlag(DrawItemState.Selected) ? Color.FromArgb(235, 203, 208) : BackColor);
-        e.Graphics.FillRectangle(background, e.Bounds);
-        TextRenderer.DrawText(e.Graphics, ((Category)categories.Items[e.Index]).Name, Font,
-            new Rectangle(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height), ForeColor,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-        e.DrawFocusRectangle();
-    }
     private static Button Button(string text, Action action)
     {
-        var b = new Button { Text = text, AutoSize = true };
+        var b = new GlassButton { Text = text, AutoSize = true };
         b.Click += (_, _) => { try { action(); } catch (Exception e) { MessageBox.Show(e.Message, "Samitivity", MessageBoxButtons.OK, MessageBoxIcon.Warning); } };
         return b;
     }

@@ -20,7 +20,7 @@ Install the SDK version listed in `global.json`. On a Windows build host:
 ./scripts/package.ps1
 ```
 
-The second command downloads **build tooling**, verifies its pinned hash/publisher, and installs it in `.tools/inno`. It is not run on the recipient's PC. The resulting installer is `artifacts/installer/Samitivity-0.1.2-win-x64-setup.exe`. Build output is unsigned unless you arrange legitimate signing.
+The second command downloads **build tooling**, verifies its pinned hash/publisher, and installs it in `.tools/inno`. It is not run on the recipient's PC. The resulting installer is `artifacts/installer/Samitivity-0.1.3-win-x64-setup.exe`. Build output is unsigned unless you arrange legitimate signing.
 
 Alternatively, push a version tag such as `v0.1.3` after updating the project version to the same `0.1.3` value. The workflow runs portable and Windows tests, builds the installer, and publishes it to GitHub Releases. To rebuild a historical version that predates automated releases, use **Actions → Build and test Samitivity → Run workflow**, leave the branch as `main`, and enter its existing tag (for example `v0.1.1`) in **version_tag**. Build artifacts are retained for 14 days as diagnostics; Releases are the permanent download location.
 

@@ -60,3 +60,7 @@ See [performance changes, diagnostics and laptop checklist](docs/PERFORMANCE-0.1
 ## 0.1.2 compatibility test release
 
 The installer now admits Windows 10 x64 builds before 22H2, including 1909. See [confirmed diagnosis, support limits and physical acceptance instructions](docs/COMPATIBILITY-0.1.2.md). CI runs on Windows Server 2025; client Windows and CrossOver results are separate. No audio backend or data schema changes.
+
+## 0.1.3 rose glass refresh
+
+The compact WinForms interface now uses a cached, blurred rose wallpaper with translucent wine surfaces and crisp ivory controls. Storage and playback behavior are preserved. See [rendering approach and verification limits](docs/GLASS-0.1.3.md).

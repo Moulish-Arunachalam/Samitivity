@@ -39,18 +39,20 @@ internal sealed class TrayApplication : ApplicationContext
     public string Status { get; private set; } = "Loading local library…";
     public string Details => string.Join(Environment.NewLine, notices.Concat(hotkeyErrors).Concat(Library.Warnings).Distinct());
     public event Action? Updated;
-    public TrayApplication(bool configure)
+    public string DataDirectory { get; }
+    public TrayApplication(bool configure, string? dataDirectory = null)
     {
+        DataDirectory = dataDirectory ?? Program.DataDirectory;
         _ = dispatch.Handle;
-        configStore = new(Path.Combine(Program.DataDirectory, "config.json"), AppConfig.Defaults, c => c.Validate());
-        var migration = Path.Combine(Program.DataDirectory, DataMigration.Receipt);
-        if (Directory.Exists(Path.Combine(Program.DataDirectory, "RecoveredData")) && File.Exists(migration)) notices.Add(File.ReadAllText(migration));
+        configStore = new(Path.Combine(DataDirectory, "config.json"), AppConfig.Defaults, c => c.Validate());
+        var migration = Path.Combine(DataDirectory, DataMigration.Receipt);
+        if (Directory.Exists(Path.Combine(DataDirectory, "RecoveredData")) && File.Exists(migration)) notices.Add(File.ReadAllText(migration));
         var loaded = configStore.Load(); Config = loaded.Value;
         if (loaded.Warning is not null) notices.Add(loaded.Warning);
-        if (!File.Exists(Path.Combine(Program.DataDirectory, "config.json"))) configStore.Save(Config);
-        var shuffle = new ShuffleEngine(new(Path.Combine(Program.DataDirectory, "state.json"), () => new(), x => x.Validate()));
+        if (!File.Exists(Path.Combine(DataDirectory, "config.json"))) configStore.Save(Config);
+        var shuffle = new ShuffleEngine(new(Path.Combine(DataDirectory, "state.json"), () => new(), x => x.Validate()));
         if (shuffle.RecoveryWarning is not null) notices.Add(shuffle.RecoveryWarning);
-        Library = new(Program.DataDirectory, new WindowsAudioValidator());
+        Library = new(DataDirectory, new WindowsAudioValidator());
         Player = new(shuffle, Library, audio);
         Player.StatusChanged += s => Post(() => { if (s.Generation < lastStatusGeneration) return; lastStatusGeneration = s.Generation; Status = s.Message; Updated?.Invoke(); });
         var menu = new ContextMenuStrip();
@@ -67,10 +69,10 @@ internal sealed class TrayApplication : ApplicationContext
         showWait = ThreadPool.RegisterWaitForSingleObject(show, (_, _) => Post(ShowConfiguration), null, Timeout.Infinite, false);
         quitWait = ThreadPool.RegisterWaitForSingleObject(quit, (_, _) => Post(async () => await ShutdownAsync()), null, Timeout.Infinite, false);
         SystemEvents.PowerModeChanged += PowerChanged;
-        var startup = Path.Combine(Program.DataDirectory, "startup-status.txt");
+        var startup = Path.Combine(DataDirectory, "startup-status.txt");
         notices.Add(File.Exists(startup) ? File.ReadAllText(startup) : "Startup not configured. Use the installer to enable sign-in startup.");
         refreshTimer = new(_ => Post(async () => await RefreshAsync()), null, Timeout.Infinite, Timeout.Infinite);
-        watcher = new FileSystemWatcher(Path.Combine(Program.DataDirectory, "VoiceNotes")) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size };
+        watcher = new FileSystemWatcher(Path.Combine(DataDirectory, "VoiceNotes")) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size };
         watcher.Changed += LibraryChanged; watcher.Created += LibraryChanged; watcher.Deleted += LibraryChanged; watcher.Renamed += LibraryChanged;
         watcher.Error += (_, _) => { try { refreshTimer.Change(750, Timeout.Infinite); } catch (ObjectDisposedException) { } };
         watcher.EnableRaisingEvents = true;
@@ -84,7 +86,7 @@ internal sealed class TrayApplication : ApplicationContext
         catch { notices.Add("Audio device notifications unavailable. Playback errors reopen the Windows default device."); }
         await RefreshAsync();
         var bundle = Path.Combine(AppContext.BaseDirectory, "BundledVoiceNotes");
-        var receipt = Path.Combine(Program.DataDirectory, "bundle-imported-v1.txt");
+        var receipt = Path.Combine(DataDirectory, "bundle-imported-v1.txt");
         if (Directory.Exists(bundle) && !File.Exists(receipt))
         {
             try
@@ -193,7 +195,7 @@ internal sealed class TrayApplication : ApplicationContext
         _ = RefreshAsync();
         form.Show(); form.WindowState = FormWindowState.Normal; form.Activate();
     }
-    private async Task ShutdownAsync()
+    internal async Task ShutdownAsync()
     {
         if (exiting) return;
         if (form is { IsDisposed: false } && !form.CanDiscard()) return;

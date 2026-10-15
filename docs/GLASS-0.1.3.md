@@ -1,0 +1,13 @@
+# Samitivity 0.1.3: rose glass rendering
+
+The application remains C# WinForms with GDI+ rendering. The previous panel used an 89%-opaque cream overlay; native white recording/status surfaces further hid the wallpaper.
+
+`RoseSurface` now stretches the embedded original rose wallpaper across the fixed 920 × 660 logical client area, composes three separable blur passes, and clips the result to an inset rounded panel with 24px logical corners. A subtle wine tint, thin light border and soft shadow finish the panel. The 24px outer margin retains the original sharp wallpaper. The bitmap is cached until size or DPI changes; normal interaction does not repeat the blur. Text and controls are drawn afterwards and never blurred.
+
+The sidebar, report list, status, checkboxes and buttons draw the correctly aligned portion of that cached backdrop, with secondary wine tints. This is wallpaper composition, not desktop transparency or a Windows 11 acrylic API. It uses ordinary WinForms/GDI+ APIs available on Windows 10. The native category-name editor appears while editing to preserve IME, caret, selection and clipboard behavior; its small editing line and the native dropdown menu have dark wine backgrounds. The status area supports scrolling and Ctrl+C to copy its diagnostic text.
+
+The window remains fixed-size. Per-monitor DPI scales the interface; on a smaller work area the outer viewport scrolls instead of discarding controls. Rounded regions and backdrop sampling are updated with layout changes. Existing recordings, migration receipts, settings paths and schema are unchanged in this release. Hotkeys, playback, import, Refresh, diagnostics, save and tray startup retain their existing logic.
+
+Windows CI captures the real management form with two synthetic WAV files, verifies native category/report selection and shortcut values, and captures an additional 150% programmatic scale pass. Images are included with the test results. This verifies Windows rendering, not physical monitor DPI transitions or client Windows 10 hardware. CI runs Windows Server 2025. CrossOver's WinForms painting, codecs and file notifications remain dependent on its Windows compatibility implementation; native Windows is the target. Refresh still explicitly reindexes category contents.
+
+Manual acceptance on Windows 10: inspect normal/125%/150% display scaling, move between monitors, edit a name using keyboard/IME, select and scroll categories and recordings, import/preview/stop/delete, save/reopen, test both hotkeys and the sign-in tray flow. Look for sharp controls above visible blurred rose shapes, a sharp outer border, and no opaque pink/white panel.
