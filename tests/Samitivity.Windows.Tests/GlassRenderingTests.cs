@@ -59,9 +59,11 @@ public sealed class GlassRenderingTests
                     table.Items[0].Selected = false;
                     var shortcut = Descendants(form).OfType<ShortcutEditor>().First();
                     Assert.Equal(config.Categories[0].Shortcut, shortcut.Value);
+                    VerifyBackdropAndLayout(form, table);
                     SaveCapture(form, "Samitivity-0.1.3-100.png");
                     form.Scale(new SizeF(1.5f, 1.5f)); Application.DoEvents();
                     table.RefreshBackdrop();
+                    VerifyBackdropAndLayout(form, table);
                     SaveCapture(form, "Samitivity-0.1.3-scaled150.png");
                     form.Close();
                 }
@@ -91,6 +93,16 @@ public sealed class GlassRenderingTests
             if (clock.Elapsed > TimeSpan.FromSeconds(15)) throw new TimeoutException("Windows UI operation did not complete.");
             Application.DoEvents(); Thread.Sleep(10);
         }
+    }
+    private static void VerifyBackdropAndLayout(Form form, GlassRecordingList table)
+    {
+        using var actual = new Bitmap(table.Width, table.Height);
+        using var expected = new Bitmap(table.Width, table.Height);
+        table.DrawToBitmap(actual, table.ClientRectangle);
+        using (var graphics = Graphics.FromImage(expected)) GlassTheme.PaintBackdrop(table, graphics, table.ClientRectangle, 65);
+        Assert.Equal(expected.GetPixel(table.Width/2, table.Height-10), actual.GetPixel(table.Width/2, table.Height-10));
+        foreach (var control in Descendants(form).Where(c => c is Button or Label && c.Parent is FlowLayoutPanel && c.Visible))
+            Assert.True(control.Bottom <= control.Parent!.ClientSize.Height, $"Clipped control: {control.Text}");
     }
     private static void SaveCapture(Form form, string filename)
     {

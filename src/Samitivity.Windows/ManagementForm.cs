@@ -34,8 +34,8 @@ internal sealed class ManagementForm : Form
         AutoScaleMode = AutoScaleMode.Dpi; StartPosition = FormStartPosition.CenterScreen;
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new(16), BackColor = Color.Transparent, ColumnCount = 2, RowCount = 6 };
         layout.ColumnStyles.Add(new(SizeType.Absolute, 180)); layout.ColumnStyles.Add(new(SizeType.Percent, 100));
-        layout.RowStyles.Add(new(SizeType.Absolute, 62)); layout.RowStyles.Add(new(SizeType.Absolute, 90)); layout.RowStyles.Add(new(SizeType.Percent, 100));
-        layout.RowStyles.Add(new(SizeType.Absolute, 82)); layout.RowStyles.Add(new(SizeType.Absolute, 94)); layout.RowStyles.Add(new(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new(SizeType.Absolute, 62)); layout.RowStyles.Add(new(SizeType.Absolute, 98)); layout.RowStyles.Add(new(SizeType.Percent, 100));
+        layout.RowStyles.Add(new(SizeType.Absolute, 96)); layout.RowStyles.Add(new(SizeType.Absolute, 94)); layout.RowStyles.Add(new(SizeType.Absolute, 52));
         var surface = new RoseSurface { Size = ClientSize, Padding = new(24) };
         var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         surface.Controls.Add(layout); viewport.Controls.Add(surface); Controls.Add(viewport);
@@ -57,7 +57,7 @@ internal sealed class ManagementForm : Form
         edit.Controls.Add(new Label { AutoSize = true, Text = "Win keys may be reserved. Ctrl+Alt can act as AltGr." });
         layout.Controls.Add(edit, 1, 1);
         recordings.Columns.Add("Recording", 270); recordings.Columns.Add("Duration", 85); recordings.Columns.Add("Change", 200);
-        layout.Controls.Add(recordings, 1, 2);
+        layout.Controls.Add(new GlassRecordingPanel(recordings), 1, 2);
         var categoryActions = new FlowLayoutPanel { Dock = DockStyle.Fill };
         categoryActions.Controls.Add(Mutate("New category", AddCategory)); categoryActions.Controls.Add(Mutate("Remove category", RemoveCategory)); layout.Controls.Add(categoryActions, 0, 3);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill };
@@ -67,6 +67,7 @@ internal sealed class ManagementForm : Form
         actions.Controls.Add(Mutate("Delete", DeleteRecording));
         actions.Controls.Add(Button("Open folder", () => { if (Selected is { } c) { if (!app.Config.Categories.Any(x => x.Id == c.Id)) { MessageBox.Show("Save this category first, then open its folder to add recordings.", "Samitivity"); return; } Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, ArgumentList = { app.Library.CategoryFolder(c.Id) } }); } }));
         actions.Controls.Add(Button("Diagnostics", () => Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, ArgumentList = { Path.Combine(app.DataDirectory, "logs") } })));
+        actions.SetFlowBreak(actions.Controls[actions.Controls.Count - 1], true);
         actions.Controls.Add(Button("Refresh", async () => { await app.RefreshAsync(revalidate: true); RenderRecordings(); }));
         layout.Controls.Add(actions, 1, 3);
         var statusArea = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };

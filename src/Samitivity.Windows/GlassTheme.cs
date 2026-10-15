@@ -77,50 +77,90 @@ internal sealed class GlassCategoryList : ListBox
     }
 }
 
-/// <summary>The native report control retains selection, accessibility and scrolling.</summary>
+/// <summary>Native report selection and scrolling with deterministic composited client painting.</summary>
 internal sealed class GlassRecordingList : ListView
 {
-    private Image? ownedBackdrop;
-    private Bitmap? sampledSurface;
-    private Point sampledOrigin;
+    private readonly ImageList rowHeight = new();
     public GlassRecordingList()
     {
-        OwnerDraw = true; DoubleBuffered = true; BorderStyle = BorderStyle.None;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        BorderStyle = BorderStyle.None; HeaderStyle = ColumnHeaderStyle.None;
         ForeColor = GlassTheme.Ivory; BackColor = Color.FromArgb(65, 25, 35);
-        DrawColumnHeader += (_, e) =>
-        {
-            GlassTheme.PaintBackdrop(this, e.Graphics, e.Bounds, 45);
-            using var line = new Pen(GlassTheme.Border); e.Graphics.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom-1, e.Bounds.Right, e.Bounds.Bottom-1);
-            TextRenderer.DrawText(e.Graphics, e.Header?.Text ?? "", Font, Rectangle.Inflate(e.Bounds, -10, 0), ForeColor,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-        };
-        DrawItem += (_, e) => { if (View != View.Details) e.DrawDefault = true; };
-        DrawSubItem += (_, e) =>
-        {
-            GlassTheme.PaintBackdrop(this, e.Graphics, e.Bounds, e.Item?.Selected == true ? 100 : 65);
-            using var line = new Pen(Color.FromArgb(35, GlassTheme.Ivory)); e.Graphics.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom-1, e.Bounds.Right, e.Bounds.Bottom-1);
-            TextRenderer.DrawText(e.Graphics, e.SubItem?.Text ?? "", Font, Rectangle.Inflate(e.Bounds, -10, 0), ForeColor,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-            if (Focused && e.Item?.Selected == true) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(e.Bounds, -2, -2));
-        };
+        rowHeight.ImageSize = new Size(1, 27); SmallImageList = rowHeight;
     }
-    internal void RefreshBackdrop()
+    protected override void OnPaint(PaintEventArgs e)
     {
-        if (Width < 1 || Height < 1 || Parent is null) return;
-        var origin = Point.Empty; Control? ancestor = this;
-        while (ancestor is not null && ancestor is not RoseSurface)
-        { origin.Offset(ancestor.Left, ancestor.Top); ancestor = ancestor.Parent; }
-        var source = (ancestor as RoseSurface)?.Backdrop;
-        if (ownedBackdrop?.Size == Size && ReferenceEquals(source, sampledSurface) && origin == sampledOrigin) return;
-        sampledSurface = source; sampledOrigin = origin;
-        var bitmap = new Bitmap(Width, Height);
-        using (var g = Graphics.FromImage(bitmap)) GlassTheme.PaintBackdrop(this, g, ClientRectangle, 65);
-        BackgroundImage = bitmap;
-        ownedBackdrop?.Dispose(); ownedBackdrop = bitmap;
-        GlassTheme.Outline(this); Invalidate();
+        GlassTheme.PaintBackdrop(this, e.Graphics, ClientRectangle, 65);
+        foreach (ListViewItem item in Items)
+        {
+            var row = item.Bounds;
+            if (row.Bottom < 0 || row.Top >= Height) continue;
+            if (item.Selected)
+            {
+                using var selected = new SolidBrush(Color.FromArgb(130, GlassTheme.Wine));
+                e.Graphics.FillRectangle(selected, new Rectangle(0, row.Top, ClientSize.Width, row.Height));
+            }
+            var x = 0;
+            for (var i = 0; i < Columns.Count; i++)
+            {
+                var bounds = new Rectangle(x + 10, row.Top, Math.Max(1, Columns[i].Width - 20), row.Height);
+                TextRenderer.DrawText(e.Graphics, i < item.SubItems.Count ? item.SubItems[i].Text : "", Font, bounds, ForeColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                x += Columns[i].Width;
+            }
+            using var line = new Pen(Color.FromArgb(35, GlassTheme.Ivory));
+            e.Graphics.DrawLine(line, 0, row.Bottom-1, ClientSize.Width, row.Bottom-1);
+            if (Focused && item.Selected) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(row, -2, -2));
+        }
     }
-    protected override void Dispose(bool disposing)
-    { if (disposing) { BackgroundImage = null; ownedBackdrop?.Dispose(); } base.Dispose(disposing); }
+    internal void RefreshBackdrop() { Invalidate(); Parent?.Invalidate(); }
+    protected override void OnSelectedIndexChanged(EventArgs e) { base.OnSelectedIndexChanged(e); Invalidate(); }
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        if (Columns.Count == 3)
+        {
+            Columns[0].Width = (int)(ClientSize.Width * .53);
+            Columns[1].Width = (int)(ClientSize.Width * .21);
+            Columns[2].Width = Math.Max(0, ClientSize.Width - Columns[0].Width - Columns[1].Width - 1);
+        }
+        Invalidate(); Parent?.Invalidate();
+    }
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        if (m.Msg is 0x115 or 0x114 or 0x20A or 0x100 or 0x201 or 0x202) Invalidate();
+    }
+    protected override void Dispose(bool disposing) { if (disposing) rowHeight.Dispose(); base.Dispose(disposing); }
+}
+
+/// <summary>Composited header outside the native list avoids opaque unused header space.</summary>
+internal sealed class GlassRecordingPanel : Panel
+{
+    private readonly GlassRecordingList list;
+    public GlassRecordingPanel(GlassRecordingList list)
+    {
+        this.list = list; DoubleBuffered = true; Dock = DockStyle.Fill;
+        SetStyle(ControlStyles.SupportsTransparentBackColor, true); BackColor = Color.Transparent;
+        Padding = new Padding(1, 28, 1, 1); Controls.Add(list);
+    }
+    protected override void OnResize(EventArgs e) { base.OnResize(e); GlassTheme.Outline(this); Invalidate(); }
+    protected override void OnPaintBackground(PaintEventArgs e) => GlassTheme.PaintBackdrop(this, e.Graphics, ClientRectangle, 45);
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var x = Padding.Left;
+        foreach (ColumnHeader column in list.Columns)
+        {
+            TextRenderer.DrawText(e.Graphics, column.Text, Font, new Rectangle(x+10, 0, Math.Max(1, column.Width-20), Padding.Top), GlassTheme.Ivory,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            x += column.Width;
+        }
+        using var border = new Pen(GlassTheme.Border);
+        e.Graphics.DrawLine(border, 0, Padding.Top-1, Width, Padding.Top-1);
+        using var shape = GlassTheme.Rounded(new Rectangle(0, 0, Width-1, Height-1), 7 * DeviceDpi / 96f);
+        e.Graphics.DrawPath(border, shape);
+    }
 }
 
 internal sealed class GlassStatus : ScrollableControl
